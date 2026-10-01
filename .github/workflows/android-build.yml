@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'arena/**']
     paths: ['android/**', 'tools/**', '.github/workflows/android-build.yml']
   pull_request:
     paths: ['android/**', 'tools/**', '.github/workflows/android-build.yml']
@@ -13,7 +13,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: android-ci-${{ github.ref }}
+  group: android-ci-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -59,9 +59,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           python3 tools/ci_diagnostics.py > "$RUNNER_TEMP/diagnostics.md"
           cat "$RUNNER_TEMP/diagnostics.md"
+          if [ -z "${PR_NUMBER:-}" ]; then PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" --json number --jq '.[0].number // empty'); fi
           if [ -n "${PR_NUMBER:-}" ]; then
             gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/diagnostics.md" || true
           fi
@@ -123,9 +125,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           python3 tools/ci_diagnostics.py > "$RUNNER_TEMP/device-diagnostics.md"
           cat "$RUNNER_TEMP/device-diagnostics.md"
+          if [ -z "${PR_NUMBER:-}" ]; then PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" --json number --jq '.[0].number // empty'); fi
           if [ -n "${PR_NUMBER:-}" ]; then
             gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/device-diagnostics.md" || true
           fi

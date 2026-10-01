@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      `android:windowLightNavigationBar` was added in API 27. On API 26 the attribute
+      would be dropped silently, so it is qualified here rather than written into the
+      base theme.
+    -->
+    <style name="Theme.VirtualVolume" parent="Theme.VirtualVolume.Base">
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>

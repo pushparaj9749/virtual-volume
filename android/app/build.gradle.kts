@@ -117,6 +117,10 @@ android {
         warningsAsErrors = false
         checkReleaseBuilds = true
         sarifReport = true
+        // A plain-text report is what CI can grep and paste into a failure comment;
+        // SARIF alone is not readable without a viewer.
+        textReport = true
+        htmlReport = true
     }
 
     testOptions {
@@ -129,6 +133,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.annotation)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
