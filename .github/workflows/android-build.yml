@@ -99,43 +99,8 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -memory 2048
-          script: |
-            set -e
-            WORKSPACE="${GITHUB_WORKSPACE:-$(git rev-parse --show-toplevel)}"
-            cd "$WORKSPACE"
-            printf 'Workspace: %s\n' "$WORKSPACE"
-            mkdir -p "$WORKSPACE/.qa"
-            DEVICE_LOG="$WORKSPACE/.qa/device-checks.log"
-            TMP_DIR="${RUNNER_TEMP:-/tmp}"
-            : > "$DEVICE_LOG"
-            run_logged() {
-              printf '+ %s\n' "$*" >> "$DEVICE_LOG"
-              if "$@" >> "$DEVICE_LOG" 2>&1; then
-                return 0
-              else
-                status=$?
-                tail -n 160 "$DEVICE_LOG"
-                return "$status"
-              fi
-            }
-            export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-            export ANDROID_SDK_ROOT="$ANDROID_HOME"
-            export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
-            run_logged command -v adb
-            run_logged adb version
-            cd "$WORKSPACE/android"
-            trap 'adb shell dumpsys window windows > "$TMP_DIR/window-state.txt" 2>&1 || true; adb logcat -d > "$TMP_DIR/device-log.txt" 2>&1 || true; mkdir -p ../.qa/screenshots; adb pull /sdcard/Android/data/dev.virtualvolume.app.debug/files/qa ../.qa/screenshots || true' EXIT
-            if ./gradlew :app:connectedDebugAndroidTest --console=plain --stacktrace >> "$DEVICE_LOG" 2>&1; then
-              cat "$DEVICE_LOG"
-            else
-              status=$?
-              tail -n 200 "$DEVICE_LOG"
-              exit "$status"
-            fi
-            adb shell dumpsys window windows > "$TMP_DIR/window-state.txt"
-            adb logcat -d > "$TMP_DIR/device-log.txt"
-            mkdir -p ../.qa/screenshots
-            adb pull /sdcard/Android/data/dev.virtualvolume.app.debug/files/qa ../.qa/screenshots || true
+          working-directory: ${{ github.workspace }}
+          script: bash tools/run_android_device_test.sh
       - name: Upload device test evidence
         if: always()
         uses: actions/upload-artifact@v4
