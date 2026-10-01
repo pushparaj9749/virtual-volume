@@ -102,6 +102,18 @@ class VolumeSettingsTest {
         assertEquals(ThemeMode.DEFAULT, ThemeMode.fromName("SEPIA"))
     }
 
+    @Test fun `nonfinite preferences recover to finite defaults`() {
+        val invalid = VolumeSettings(idleOpacity = Float.NaN, lengthDp = Float.POSITIVE_INFINITY, offsetFraction = Float.NaN).sanitized()
+        assertEquals(VolumeSettings.DEFAULT.idleOpacity, invalid.idleOpacity, 0f)
+        assertEquals(VolumeSettings.DEFAULT.lengthDp, invalid.lengthDp, 0f)
+        assertEquals(VolumeSettings.DEFAULT.offsetFraction, invalid.offsetFraction, 0f)
+    }
+
+    @Test fun `active opacity never becomes less visible than idle`() {
+        val settings = VolumeSettings(idleOpacity = 0.9f, activeOpacity = 0.4f).sanitized()
+        assertTrue(settings.activeOpacity >= settings.idleOpacity)
+    }
+
     @Test
     fun `screen edges know their opposite`() {
         assertEquals(ScreenEdge.LEFT, ScreenEdge.RIGHT.opposite)

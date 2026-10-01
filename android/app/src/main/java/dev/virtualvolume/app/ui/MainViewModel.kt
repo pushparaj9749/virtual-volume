@@ -10,6 +10,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.virtualvolume.app.appContainer
 import dev.virtualvolume.app.core.audio.VolumeState
+import dev.virtualvolume.app.core.audio.VolumeResult
 import dev.virtualvolume.app.core.data.VolumeSettings
 import dev.virtualvolume.app.core.platform.NotificationPermission
 import dev.virtualvolume.app.core.platform.OverlayPermission
@@ -26,6 +27,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -74,8 +78,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .map { it.audioStream }
         .distinctUntilChanged()
         .flatMapLatest { stream ->
-            container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it).index }
-                .map { container.volumeController.snapshot(stream) }
+            merge(
+                container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it).index }
+                    .map { container.volumeController.snapshot(stream) },
+                container.volumeController.changes.filter { it.stream == stream },
+            )
         }
 
     val uiState: StateFlow<UiState> = combine(
@@ -83,14 +90,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         volumeFlow,
         OverlayRuntime.isServiceRunning,
         permissions,
-    ) { settings, volume, running, permission ->
+        OverlayRuntime.lastError,
+    ) { settings, volume, running, permission, error ->
         UiState(
             settings = settings,
             volume = volume,
             serviceRunning = running,
             overlayPermissionGranted = permission.overlay,
             notificationsEnabled = permission.notifications,
-            runtimeError = OverlayRuntime.lastError.value,
+            runtimeError = error ?: settings.serviceNotice,
             isLoading = false,
         )
     }.stateIn(
@@ -106,22 +114,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             overlay = OverlayPermission.isGranted(app),
             notifications = NotificationPermission.isGranted(app),
         )
+        viewModelScope.launch {
+            val settings = container.settingsRepository.settings.first()
+            if (settings.enabled && settings.serviceNotice == null && permissions.value.overlay && !OverlayRuntime.isServiceRunning.value) {
+                container.overlayServiceController.start()
+            }
+        }
     }
 
     fun setEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            container.settingsRepository.update { it.copy(enabled = enabled) }
-            if (enabled) {
-                when (val result = container.overlayServiceController.start()) {
-                    is OverlayStartResult.Started -> Unit
-                    is OverlayStartResult.MissingOverlayPermission ->
-                        events.send(UiEvent.RequestOverlayPermission)
-
-                    is OverlayStartResult.Blocked ->
-                        events.send(UiEvent.Error(result.message))
+            try {
+                when (val result = container.overlayServiceController.setEnabled(enabled)) {
+                    OverlayStartResult.Started -> {
+                        if (enabled && !NotificationPermission.isGranted(getApplication()) && Build.VERSION.SDK_INT >= 33) {
+                            events.send(UiEvent.RequestNotificationPermission)
+                        }
+                    }
+                    OverlayStartResult.MissingOverlayPermission -> events.send(UiEvent.RequestOverlayPermission)
+                    is OverlayStartResult.Blocked -> events.send(UiEvent.Error(result.message))
                 }
-            } else {
-                container.overlayServiceController.stop()
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                events.send(UiEvent.Error("Settings could not be saved. Please retry."))
             }
             TileStateSync.refresh(getApplication())
         }
@@ -129,14 +144,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateSettings(transform: (VolumeSettings) -> VolumeSettings) {
         viewModelScope.launch {
-            container.settingsRepository.update(transform)
+            try { container.settingsRepository.update(transform) }
+            catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                events.send(UiEvent.Error("Your preference could not be saved. Please retry."))
+            }
         }
     }
 
     /** Drives the media-volume slider in the Audio section. */
     fun setVolumeIndex(index: Int) {
         viewModelScope.launch {
-            container.volumeController.setIndex(uiState.value.settings.audioStream, index)
+            handleVolumeResult(container.volumeController.setIndex(uiState.value.settings.audioStream, index))
         }
     }
 
@@ -148,9 +167,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             deltaSteps = deltaSteps,
             stepSize = settings.volumeStep,
         )
-        if (result is dev.virtualvolume.app.core.audio.VolumeResult.Success && settings.hapticsEnabled) {
-            container.haptics.tick()
-        }
+        handleVolumeResult(result)
+        if (result is VolumeResult.Success && result.changed && settings.hapticsEnabled) container.haptics.tick()
+    }
+
+    private fun handleVolumeResult(result: VolumeResult) {
+        if (result is VolumeResult.Failure) viewModelScope.launch { events.send(UiEvent.Error(result.message)) }
     }
 
     fun completeOnboarding() {

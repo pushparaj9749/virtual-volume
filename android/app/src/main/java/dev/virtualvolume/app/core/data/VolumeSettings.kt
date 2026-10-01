@@ -3,21 +3,21 @@ package dev.virtualvolume.app.core.data
 /**
  * Every user-tunable value of the floating control.
  *
- * Position is stored as [offsetFraction] — a proportion of the usable height of the
- * *current* orientation — rather than as raw screen coordinates. That is what keeps the
+ * Position is stored as [offsetFraction] — a proportion of travel along the edge in the
+ * display's NATURAL orientation — rather than as raw screen coordinates. That is what keeps the
  * control on the same relative spot after a rotation instead of drifting off screen.
  */
 data class VolumeSettings(
     val enabled: Boolean = false,
-    val startOnBoot: Boolean = true,
+    val startOnBoot: Boolean = false,
     val edge: ScreenEdge = ScreenEdge.DEFAULT,
     val offsetFraction: Float = 0.32f,
     val lengthDp: Float = 132f,
     val thicknessDp: Float = 5f,
     val idleOpacity: Float = 0.42f,
     val activeOpacity: Float = 1f,
-    val touchZoneWidthDp: Float = 40f,
-    val touchZoneLengthDp: Float = 190f,
+    val touchZoneWidthDp: Float = 32f,
+    val touchZoneLengthDp: Float = 164f,
     val swipeSensitivity: Float = 1f,
     val animationDurationMs: Long = 180L,
     val animationsEnabled: Boolean = true,
@@ -27,20 +27,23 @@ data class VolumeSettings(
     val tapMode: TapMode = TapMode.DEFAULT,
     val themeMode: ThemeMode = ThemeMode.DEFAULT,
     val onboardingCompleted: Boolean = false,
+    val tileAdded: Boolean = false,
+    val serviceNotice: String? = null,
 ) {
 
     /** Clamps every value into the supported range. Called on every write. */
     fun sanitized(): VolumeSettings = copy(
-        offsetFraction = offsetFraction.coerceIn(MIN_OFFSET_FRACTION, MAX_OFFSET_FRACTION),
-        lengthDp = lengthDp.coerceIn(MIN_LENGTH_DP, MAX_LENGTH_DP),
-        thicknessDp = thicknessDp.coerceIn(MIN_THICKNESS_DP, MAX_THICKNESS_DP),
+        offsetFraction = offsetFraction.finiteOr(DEFAULT.offsetFraction).coerceIn(MIN_OFFSET_FRACTION, MAX_OFFSET_FRACTION),
+        lengthDp = lengthDp.finiteOr(DEFAULT.lengthDp).coerceIn(MIN_LENGTH_DP, MAX_LENGTH_DP),
+        thicknessDp = thicknessDp.finiteOr(DEFAULT.thicknessDp).coerceIn(MIN_THICKNESS_DP, MAX_THICKNESS_DP),
         // The control must never be fully transparent while idle: a control you cannot
         // find is a control you cannot use.
-        idleOpacity = idleOpacity.coerceIn(MIN_IDLE_OPACITY, MAX_OPACITY),
-        activeOpacity = activeOpacity.coerceIn(MIN_ACTIVE_OPACITY, MAX_OPACITY),
-        touchZoneWidthDp = touchZoneWidthDp.coerceIn(MIN_TOUCH_WIDTH_DP, MAX_TOUCH_WIDTH_DP),
-        touchZoneLengthDp = touchZoneLengthDp.coerceIn(MIN_TOUCH_LENGTH_DP, MAX_TOUCH_LENGTH_DP),
-        swipeSensitivity = swipeSensitivity.coerceIn(MIN_SENSITIVITY, MAX_SENSITIVITY),
+        idleOpacity = idleOpacity.finiteOr(DEFAULT.idleOpacity).coerceIn(MIN_IDLE_OPACITY, MAX_OPACITY),
+        activeOpacity = activeOpacity.finiteOr(DEFAULT.activeOpacity).coerceIn(MIN_ACTIVE_OPACITY, MAX_OPACITY)
+            .coerceAtLeast(idleOpacity.finiteOr(DEFAULT.idleOpacity).coerceIn(MIN_IDLE_OPACITY, MAX_OPACITY)),
+        touchZoneWidthDp = touchZoneWidthDp.finiteOr(DEFAULT.touchZoneWidthDp).coerceIn(MIN_TOUCH_WIDTH_DP, MAX_TOUCH_WIDTH_DP),
+        touchZoneLengthDp = touchZoneLengthDp.finiteOr(DEFAULT.touchZoneLengthDp).coerceIn(MIN_TOUCH_LENGTH_DP, MAX_TOUCH_LENGTH_DP),
+        swipeSensitivity = swipeSensitivity.finiteOr(DEFAULT.swipeSensitivity).coerceIn(MIN_SENSITIVITY, MAX_SENSITIVITY),
         animationDurationMs = animationDurationMs.coerceIn(MIN_ANIMATION_MS, MAX_ANIMATION_MS),
         volumeStep = volumeStep.coerceIn(MIN_VOLUME_STEP, MAX_VOLUME_STEP),
     )
@@ -60,7 +63,7 @@ data class VolumeSettings(
         const val MAX_OPACITY = 1f
 
         const val MIN_TOUCH_WIDTH_DP = 28f
-        const val MAX_TOUCH_WIDTH_DP = 96f
+        const val MAX_TOUCH_WIDTH_DP = 64f
 
         const val MIN_TOUCH_LENGTH_DP = 120f
         const val MAX_TOUCH_LENGTH_DP = 320f
@@ -77,3 +80,5 @@ data class VolumeSettings(
         val DEFAULT = VolumeSettings()
     }
 }
+
+private fun Float.finiteOr(fallback: Float): Float = if (isFinite()) this else fallback

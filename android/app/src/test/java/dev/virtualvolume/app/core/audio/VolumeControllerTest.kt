@@ -16,9 +16,15 @@ class VolumeControllerTest {
         private val max: Int = 15,
         private var current: Int = 7,
         private val failOnWrite: Boolean = false,
+        private val min: Int = 0,
+        private val ignoreWrites: Boolean = false,
+        private val fixed: Boolean = false,
     ) : VolumeBackend {
         var writes = mutableListOf<Int>()
         var lastWrite: Int? = null
+
+        override fun minVolume(stream: VolumeStreamType): Int = min
+        override fun isFixedVolume(): Boolean = fixed
 
         override fun maxVolume(stream: VolumeStreamType): Int = max
 
@@ -28,7 +34,7 @@ class VolumeControllerTest {
             if (failOnWrite) throw SecurityException("blocked by the system")
             writes += index
             lastWrite = index
-            current = index
+            if (!ignoreWrites) current = index
         }
     }
 
@@ -105,6 +111,28 @@ class VolumeControllerTest {
         val backend = FakeBackend(max = 0)
         val result = VolumeController(backend).setIndex(VolumeStreamType.MEDIA, 5)
 
+        assertTrue(result is VolumeResult.Failure)
+        assertNull(backend.lastWrite)
+    }
+
+    @Test fun `nonzero stream minimum is respected`() {
+        val backend = FakeBackend(max = 10, current = 4, min = 2)
+        val result = VolumeController(backend).setIndex(VolumeStreamType.VOICE_CALL, -20) as VolumeResult.Success
+        assertEquals(2, result.state.index)
+        assertEquals(2, backend.lastWrite)
+        assertEquals(0f, result.state.fraction, 0f)
+    }
+
+    @Test fun `safe volume or OEM ignored writes never appear as fake values`() {
+        val backend = FakeBackend(current = 7, ignoreWrites = true)
+        val result = VolumeController(backend).setIndex(VolumeStreamType.MEDIA, 15) as VolumeResult.Success
+        assertEquals(7, result.state.index)
+        assertTrue(!result.changed)
+    }
+
+    @Test fun `fixed volume returns an actionable failure without a write`() {
+        val backend = FakeBackend(fixed = true)
+        val result = VolumeController(backend).changeBy(VolumeStreamType.MEDIA, 1, 1)
         assertTrue(result is VolumeResult.Failure)
         assertNull(backend.lastWrite)
     }

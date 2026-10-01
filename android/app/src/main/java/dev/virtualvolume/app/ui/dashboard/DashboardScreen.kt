@@ -116,8 +116,8 @@ fun DashboardScreen(
             AttentionCard(
                 icon = Icons.Rounded.Notifications,
                 title = "Notifications are blocked",
-                body = "Android hides the notification that keeps the control running. The control still " +
-                    "works, but a silent notification is what keeps it alive.",
+                body = "Notifications are optional on Android 13+. The control can still run, but allowing " +
+                    "them gives you a quiet, easy-to-reach off switch in the notification shade.",
                 actionLabel = "Allow notifications",
                 onAction = onGrantNotificationPermission,
             )
@@ -128,8 +128,8 @@ fun DashboardScreen(
                 icon = Icons.Rounded.Warning,
                 title = "Something blocked the control",
                 body = message,
-                actionLabel = "Open settings",
-                onAction = onGrantOverlayPermission,
+                actionLabel = if (state.overlayPermissionGranted) "Resume control" else "Grant permission",
+                onAction = if (state.overlayPermissionGranted) { { onToggleEnabled(true) } } else onGrantOverlayPermission,
             )
         }
 
@@ -150,6 +150,7 @@ fun DashboardScreen(
 
         QuickSettingsSection(
             serviceActive = state.controlActive,
+            tileAdded = settings.tileAdded,
             onOpenTilePreferences = onOpenTilePreferences,
         )
 
@@ -197,9 +198,10 @@ private fun StatusCard(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = when {
-                        active -> "The control is live on the ${state.settings.edge.label.lowercase()} edge."
+                        active -> "Ready on your physical ${state.settings.edge.label.lowercase()} edge."
                         !state.overlayPermissionGranted -> "Waiting for overlay permission."
-                        else -> "Turned off. The control is not on screen."
+                        state.settings.enabled -> "Control paused. Tap Resume to bring it back."
+                        else -> "Your sound. Your control."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -208,7 +210,7 @@ private fun StatusCard(
                 StatusPill(active = active)
                 Spacer(Modifier.height(18.dp))
                 Button(
-                    onClick = { onToggleEnabled(!state.settings.enabled) },
+                    onClick = { onToggleEnabled(!active) },
                     shape = MaterialTheme.shapes.small,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -221,7 +223,7 @@ private fun StatusCard(
                         modifier = Modifier.size(18.dp),
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(if (state.settings.enabled) "Turn off" else "Turn on")
+                    Text(if (active) "Turn off" else if (state.settings.enabled) "Resume control" else "Turn on")
                 }
             }
 
@@ -231,7 +233,7 @@ private fun StatusCard(
                 state = state,
                 accent = accent,
                 onStep = onPreviewStep,
-                modifier = Modifier.width(122.dp).aspectRatio(0.48f),
+                modifier = Modifier.width(104.dp).aspectRatio(0.48f),
             )
         }
     }
@@ -407,7 +409,7 @@ private fun ControlSection(
             )
             RowDivider()
             SegmentedChoiceRow(
-                label = "Edge",
+                label = "Physical edge (natural orientation)",
                 options = ScreenEdge.entries.toList(),
                 optionLabel = { it.label },
                 selected = settings.edge,
@@ -472,7 +474,7 @@ private fun ControlSection(
             RowDivider()
             SwitchRow(
                 title = "Start after reboot",
-                subtitle = "Brings the control back when the phone restarts",
+                subtitle = "Opt in to restoration where Android allows it",
                 checked = settings.startOnBoot,
                 onCheckedChange = { value -> onUpdateSettings { it.copy(startOnBoot = value) } },
             )
@@ -495,7 +497,8 @@ private fun AudioSection(
 ) {
     val settings = state.settings
     val maxVolume = state.volume.max.coerceAtLeast(1)
-    val index = state.volume.index.coerceIn(0, maxVolume)
+    val minVolume = state.volume.min
+    val index = state.volume.index.coerceIn(minVolume, maxVolume)
 
     Column {
         SectionHeader("Audio")
@@ -513,20 +516,21 @@ private fun AudioSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(14.dp))
-            SliderRow(
+            if (state.volume.available) SliderRow(
                 label = "${settings.audioStream.label} volume",
                 valueLabel = if (state.volume.index >= 0) "$index / $maxVolume" else "Unavailable",
                 value = index.toFloat(),
-                valueRange = 0f..maxVolume.toFloat(),
-                steps = (maxVolume - 1).coerceAtLeast(0),
+                valueRange = minVolume.toFloat()..maxVolume.toFloat(),
+                steps = (maxVolume - minVolume - 1).coerceAtLeast(0),
                 onValueChange = { value -> onVolumeIndexChange(value.roundToInt()) },
             )
+            else Text("Volume is unavailable for this output. Reconnect the audio device or select Media.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             SliderRow(
                 label = "Volume step",
                 valueLabel = "${settings.volumeStep} level${if (settings.volumeStep == 1) "" else "s"}",
                 value = settings.volumeStep.toFloat(),
                 valueRange = VolumeSettings.MIN_VOLUME_STEP.toFloat()..VolumeSettings.MAX_VOLUME_STEP.toFloat(),
-                steps = VolumeSettings.MAX_VOLUME_STEP - VolumeSettings.MIN_VOLUME_STEP,
+                steps = VolumeSettings.MAX_VOLUME_STEP - VolumeSettings.MIN_VOLUME_STEP - 1,
                 onValueChange = { value -> onUpdateSettings { it.copy(volumeStep = value.roundToInt()) } },
             )
             RowDivider()
@@ -581,6 +585,7 @@ private fun FeedbackSection(
 @Composable
 private fun QuickSettingsSection(
     serviceActive: Boolean,
+    tileAdded: Boolean,
     onOpenTilePreferences: () -> Unit,
 ) {
     Column {
@@ -609,7 +614,7 @@ private fun QuickSettingsSection(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = if (serviceActive) "Shows as ON in the panel" else "Shows as OFF in the panel",
+                        text = if (tileAdded) { if (serviceActive) "Tile added · ON" else "Tile added · OFF" } else "Add the tile manually for instant access",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -625,8 +630,8 @@ private fun QuickSettingsSection(
             )
             Spacer(Modifier.height(6.dp))
             ActionRow(
-                title = "Open tile settings",
-                subtitle = "Jump straight to the Quick Settings editor",
+                title = "How to add the tile",
+                subtitle = "A short guide to your phone's Quick Settings editor",
                 icon = Icons.Rounded.Settings,
                 onClick = onOpenTilePreferences,
             )
@@ -687,8 +692,8 @@ private fun ScreenOffNote() {
         Spacer(Modifier.height(8.dp))
         Text(
             text = "Android does not deliver touch events to overlays while the display is powered down, " +
-                "and no app can change that. Virtual Volume keeps running in the background and restores the " +
-                "control the moment the screen turns back on — it does not claim to work with the screen off.",
+                "so screen-off swipes are not supported. The service preserves your settings where Android " +
+                "permits it, and the control returns when you wake and unlock the phone. Secure apps can also hide overlays.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
