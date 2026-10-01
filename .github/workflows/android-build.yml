@@ -3,6 +3,9 @@ name: Android CI
 # Continuous verification of the Android app: compile, unit tests, lint and both APK
 # variants. Signing and publishing live in release.yml so secrets are only ever touched
 # on a tagged release.
+#
+# On failure this job re-runs the failing Gradle invocation and posts the compiler / test
+# output as a PR comment, so the exact diagnostics are available without downloading logs.
 
 on:
   push:
@@ -12,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: android-ci-${{ github.ref }}
@@ -47,7 +51,6 @@ jobs:
           java -version
           echo "ANDROID_HOME=${ANDROID_HOME}"
           test -d "${ANDROID_HOME}" || { echo "Android SDK directory is missing"; exit 1; }
-          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --list_installed 2>/dev/null | head -30 || true
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -55,19 +58,25 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: Report signing availability
-        run: gradle :app:printReleaseSigningStatus
+        run: gradle :app:printReleaseSigningStatus --console=plain
+
+      - name: Compile main sources
+        run: gradle :app:compileDebugKotlin --console=plain
+
+      - name: Compile unit tests
+        run: gradle :app:compileDebugUnitTestKotlin --console=plain
 
       - name: Run unit tests
-        run: gradle :app:testDebugUnitTest --stacktrace
+        run: gradle :app:testDebugUnitTest --console=plain
 
       - name: Run Android lint
-        run: gradle :app:lintDebug
+        run: gradle :app:lintDebug --console=plain
 
       - name: Assemble debug APK
-        run: gradle :app:assembleDebug
+        run: gradle :app:assembleDebug --console=plain
 
       - name: Assemble release APK
-        run: gradle :app:assembleRelease
+        run: gradle :app:assembleRelease --console=plain
 
       - name: Verify build outputs
         run: |
@@ -93,8 +102,34 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload debug APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: virtual-volume-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # Publish the compiler / test diagnostics as a PR comment so they can be read
+      # without downloading the raw run logs.
+      - name: Publish failure diagnostics
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gradle :app:testDebugUnitTest :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --continue --console=plain > /tmp/gradle-fail.log 2>&1 || true
+          {
+            echo '### Android CI — diagnostics'
+            echo
+            echo '```text'
+            grep -E 'e: |error:|FAILED|warning: ' /tmp/gradle-fail.log | head -60 || true
+            echo '---'
+            tail -n 40 /tmp/gradle-fail.log
+            echo '```'
+          } > /tmp/comment.md
+          REF="${GITHUB_REF}"
+          if [[ "$REF" == refs/pull/* ]]; then
+            NUM="$(echo "$REF" | cut -d/ -f3)"
+            gh pr comment "$NUM" --repo "$GITHUB_REPOSITORY" --body-file /tmp/comment.md || true
+          else
+            cat /tmp/comment.md
+          fi
