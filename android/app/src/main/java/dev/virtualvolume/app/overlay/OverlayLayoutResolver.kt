@@ -34,9 +34,11 @@ data class ControlPlacement(
  * A resolved window position.
  *
  * [xOffset] is the distance from the chosen edge and [yOffset] the distance from the top,
- * both measured inside the usable area. The platform layer turns [edge] into a gravity of
- * `START`/`END`, which Android resolves against the layout direction — so "right" stays
- * right in portrait and in both landscape rotations without recomputing anything.
+ * both measured inside the usable area. The platform layer turns [edge] into an *absolute*
+ * `LEFT`/`RIGHT` gravity — deliberately not `START`/`END`, which would swap the sides in a
+ * right-to-left locale after the user picked a physical edge. Because the offsets are
+ * recomputed from the live bounds on every rotation, "right" stays right in portrait and in
+ * both landscape orientations.
  */
 data class WindowPlacement(
     val edge: ScreenEdge,
