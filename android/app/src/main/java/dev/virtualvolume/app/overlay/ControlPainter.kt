@@ -21,19 +21,19 @@ class ControlPainter(style: ControlStyle) {
         private set
 
     private val trackPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
+        setStyle(Paint.Style.FILL)
         color = style.trackColor
     }
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
+        setStyle(Paint.Style.FILL)
         color = style.fillColor
     }
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
+        setStyle(Paint.Style.STROKE)
         color = style.glowColor
     }
     private val capPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
+        setStyle(Paint.Style.FILL)
         color = 0xFFFFFFFF.toInt()
     }
 
