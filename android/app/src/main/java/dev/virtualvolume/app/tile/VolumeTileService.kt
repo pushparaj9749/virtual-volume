@@ -1,5 +1,6 @@
 package dev.virtualvolume.app.tile
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
@@ -87,6 +88,8 @@ class VolumeTileService : TileService() {
         tile.updateTile()
     }
 
+    // The PendingIntent overload does not exist before API 34; the legacy call is guarded.
+    @SuppressLint("StartActivityAndCollapseDeprecated")
     private fun openApp() {
         val intent = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         if (Build.VERSION.SDK_INT >= 34) startActivityAndCollapse(PendingIntent.getActivity(this, 0, intent,
