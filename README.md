@@ -175,12 +175,20 @@ build still assembles unsigned and `release.yml` falls back to a debug-signed AP
 1. Bump `versionCode` / `versionName` in `android/app/build.gradle.kts`.
 2. Commit, merge to `main`, then tag: `git tag v1.2.0 && git push origin v1.2.0`.
 3. `release.yml` runs: decodes the keystore from `ANDROID_KEYSTORE_BASE64`, builds the signed release
-   APK, verifies it with `apksigner`, and creates/updates a GitHub Release with the APK + SHA-256 and
-   generated release notes.
+   APK, and verifies it with `apksigner --verbose --print-certs`. Verification is a **gate**: the build
+   fails if `apksigner` is missing, rejects the APK, or reports no signature scheme as `true`. It then
+   creates/updates a GitHub Release with the APK, a SHA-256 checksum and generated release notes.
 4. The website's **Download APK** button reads the latest release via the GitHub API and points at the
    real asset (falling back to the `releases/latest` redirect).
 
 Semantic versioning is used (`vMAJOR.MINOR.PATCH`).
+
+**Do not move a published tag.** Deleting or re-pointing a git tag leaves the existing Release
+untagged and in draft state, after which GitHub's `/releases/latest` returns 404 — and that endpoint
+is what the website resolves its download through, so the button silently loses its target. Bump the
+version and tag again instead. `release.yml` re-attaches the tag and clears the draft flag on the
+update path, and its verification step fails the build if `/releases/latest` does not resolve to the
+tag it just published.
 
 ---
 
