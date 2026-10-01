@@ -1,0 +1,205 @@
+name: Release
+
+# Publishes a signed release APK to GitHub Releases.
+#
+# Signing material comes from repository secrets and is passed to Gradle through
+# environment variables only — it is never written into the checkout and never echoed.
+# The keystore lives in $RUNNER_TEMP and is removed in a step that always runs.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+jobs:
+  release:
+    name: Build, sign and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Read version
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
+          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts)
+          TAG="${GITHUB_REF_NAME:-v$VERSION_NAME}"
+          {
+            echo "name=$VERSION_NAME"
+            echo "code=$VERSION_CODE"
+            echo "tag=$TAG"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building $TAG (versionCode $VERSION_CODE)"
+
+      - name: Decode release keystore
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set. Falling back to a debug-signed APK so a working download still exists."
+            exit 0
+          fi
+          KEYSTORE_PATH="$RUNNER_TEMP/virtual-volume-release.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH" || { echo "::error::Decoded keystore is empty"; exit 1; }
+          echo "available=true" >> "$GITHUB_OUTPUT"
+          echo "path=$KEYSTORE_PATH" >> "$GITHUB_OUTPUT"
+          echo "Keystore decoded to a temporary path outside the checkout."
+
+      - name: Build APK
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ steps.signing.outputs.path }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          gradle :app:printReleaseSigningStatus
+          if [ "${{ steps.signing.outputs.available }}" = "true" ]; then
+            gradle :app:assembleRelease
+          else
+            gradle :app:assembleDebug
+          fi
+
+      - name: Collect and verify APK
+        id: apk
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.signing.outputs.available }}" = "true" ]; then
+            SRC="app/build/outputs/apk/release/app-release.apk"
+            NAME="virtual-volume-${{ steps.version.outputs.name }}-release.apk"
+          else
+            SRC="app/build/outputs/apk/release/app-release.apk"
+            [ -f "$SRC" ] || SRC="app/build/outputs/apk/debug/app-debug.apk"
+            NAME="virtual-volume-${{ steps.version.outputs.name }}-debug-signed.apk"
+          fi
+          test -f "$SRC" || { echo "::error::No APK was produced at $SRC"; exit 1; }
+
+          DEST="$RUNNER_TEMP/$NAME"
+          cp "$SRC" "$DEST"
+          test -s "$DEST"
+
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -1 || true)
+          if [ -n "$BUILD_TOOLS" ] && [ -x "$BUILD_TOOLS/apksigner" ]; then
+            "$BUILD_TOOLS/apksigner" verify --print-certs "$DEST" | grep -Ei 'verified using|Signer #1 certificate DN|SHA-256 digest' || true
+          else
+            echo "apksigner not available; skipping signature verification"
+          fi
+
+          ( cd "$RUNNER_TEMP" && sha256sum "$NAME" > "virtual-volume-${{ steps.version.outputs.name }}-sha256.txt" )
+
+          {
+            echo "path=$DEST"
+            echo "name=$NAME"
+            echo "checksum_file=$RUNNER_TEMP/virtual-volume-${{ steps.version.outputs.name }}-sha256.txt"
+            echo "sha256=$(sha256sum "$DEST" | cut -d' ' -f1)"
+            echo "size=$(du -h "$DEST" | cut -f1 | tr -d ' ')"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          PREVIOUS=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
+          NOTES="$RUNNER_TEMP/notes.md"
+          {
+            echo "**Virtual Volume ${{ steps.version.outputs.name }}** (versionCode ${{ steps.version.outputs.code }})"
+            echo
+            echo "- APK: \`${{ steps.apk.outputs.name }}\` (${{ steps.apk.outputs.size }})"
+            echo "- SHA-256: \`${{ steps.apk.outputs.sha256 }}\`"
+            echo
+            if [ -n "$PREVIOUS" ]; then
+              echo "### Changes since $PREVIOUS"
+              echo
+              git log --no-merges --pretty='- %s' "$PREVIOUS".."$TAG"
+            else
+              echo "### First release"
+              echo
+              echo "Floating volume control, gesture engine, Quick Settings tile, onboarding and settings."
+            fi
+            echo
+            echo "### Install"
+            echo
+            echo "1. Download the APK on your phone."
+            echo "2. Allow your browser to install unknown apps when Android asks."
+            echo "3. Open Virtual Volume and follow the setup."
+          } > "$NOTES"
+          echo "path=$NOTES" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          TITLE="Virtual Volume ${{ steps.version.outputs.name }}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              "${{ steps.apk.outputs.path }}" \
+              "${{ steps.apk.outputs.checksum_file }}" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "$TITLE" --notes-file "${{ steps.notes.outputs.path }}"
+          else
+            gh release create "$TAG" \
+              "${{ steps.apk.outputs.path }}" \
+              "${{ steps.apk.outputs.checksum_file }}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TITLE" \
+              --notes-file "${{ steps.notes.outputs.path }}" \
+              --target "$GITHUB_SHA"
+          fi
+
+      - name: Verify release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' | tee "$RUNNER_TEMP/assets.txt"
+          grep -q '\.apk$' "$RUNNER_TEMP/assets.txt" || { echo "::error::Release has no APK asset"; exit 1; }
+          echo "Release $TAG carries an APK asset."
+
+      - name: Remove keystore
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/virtual-volume-release.keystore" 2>/dev/null || true
+          echo "Temporary signing material removed."

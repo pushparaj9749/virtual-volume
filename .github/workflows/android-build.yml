@@ -17,6 +17,10 @@ concurrency:
   group: android-ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  ANDROID_HOME: /usr/local/lib/android/sdk
+  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
 jobs:
   build:
     name: Build, test and lint
@@ -37,8 +41,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Report toolchain
+        run: |
+          set -euo pipefail
+          java -version
+          echo "ANDROID_HOME=${ANDROID_HOME}"
+          test -d "${ANDROID_HOME}" || { echo "Android SDK directory is missing"; exit 1; }
+          "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --list_installed 2>/dev/null | head -30 || true
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -46,19 +55,19 @@ jobs:
           gradle-version: '8.11.1'
 
       - name: Report signing availability
-        run: gradle printReleaseSigningStatus
+        run: gradle :app:printReleaseSigningStatus
 
       - name: Run unit tests
-        run: gradle testDebugUnitTest --stacktrace
+        run: gradle :app:testDebugUnitTest --stacktrace
 
       - name: Run Android lint
-        run: gradle lintDebug
+        run: gradle :app:lintDebug
 
       - name: Assemble debug APK
-        run: gradle assembleDebug
+        run: gradle :app:assembleDebug
 
       - name: Assemble release APK
-        run: gradle assembleRelease
+        run: gradle :app:assembleRelease
 
       - name: Verify build outputs
         run: |
