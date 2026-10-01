@@ -115,12 +115,26 @@ jobs:
           cp "$SRC" "$DEST"
           test -s "$DEST"
 
+          # Signature verification is a gate, not a report: an APK that does not verify
+          # must never reach a Release that the website points users at.
+          # --verbose is what makes apksigner print the per-scheme lines; the check below
+          # requires one of them to actually read "true", not merely to be mentioned.
           BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -1 || true)
-          if [ -n "$BUILD_TOOLS" ] && [ -x "$BUILD_TOOLS/apksigner" ]; then
-            "$BUILD_TOOLS/apksigner" verify --print-certs "$DEST" | grep -Ei 'verified using|Signer #1 certificate DN|SHA-256 digest' || true
-          else
-            echo "apksigner not available; skipping signature verification"
+          if [ -z "$BUILD_TOOLS" ] || [ ! -x "$BUILD_TOOLS/apksigner" ]; then
+            echo "::error::apksigner not found under $ANDROID_HOME/build-tools; cannot verify the APK"
+            exit 1
           fi
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$DEST" > "$RUNNER_TEMP/apksigner.txt" 2>&1 || {
+            echo "::error::apksigner rejected $NAME"
+            cat "$RUNNER_TEMP/apksigner.txt"
+            exit 1
+          }
+          cat "$RUNNER_TEMP/apksigner.txt"
+          grep -Eqi '^Verified using v[0-9]+ scheme.*: *true' "$RUNNER_TEMP/apksigner.txt" || {
+            echo "::error::apksigner reported no verified signature scheme for $NAME"
+            exit 1
+          }
+          echo "Signature verified for $NAME."
 
           ( cd "$RUNNER_TEMP" && sha256sum "$NAME" > "virtual-volume-${{ steps.version.outputs.name }}-sha256.txt" )
 
@@ -144,6 +158,11 @@ jobs:
             echo
             echo "- APK: \`${{ steps.apk.outputs.name }}\` (${{ steps.apk.outputs.size }})"
             echo "- SHA-256: \`${{ steps.apk.outputs.sha256 }}\`"
+            if [ "${{ steps.signing.outputs.available }}" = "true" ]; then
+              echo "- Signed with: the project release key, verified by \`apksigner\` during the build"
+            else
+              echo "- Signed with: the CI debug key — \`ANDROID_KEYSTORE_BASE64\` was not available, so this is not a release-signed build"
+            fi
             echo
             if [ -n "$PREVIOUS" ]; then
               echo "### Changes since $PREVIOUS"
