@@ -194,8 +194,16 @@ jobs:
               "${{ steps.apk.outputs.path }}" \
               "${{ steps.apk.outputs.checksum_file }}" \
               --repo "$GITHUB_REPOSITORY" --clobber
+            # Re-attaching the tag and clearing the draft flag is not cosmetic. Deleting
+            # or re-pointing a git tag leaves an existing Release untagged and in draft,
+            # after which GitHub's /releases/latest 404s -- and that endpoint is exactly
+            # what the website's Download APK button resolves through.
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
-              --title "$TITLE" --notes-file "${{ steps.notes.outputs.path }}"
+              --title "$TITLE" \
+              --notes-file "${{ steps.notes.outputs.path }}" \
+              --tag "$TAG" \
+              --target "$GITHUB_SHA" \
+              --draft=false
           else
             gh release create "$TAG" \
               "${{ steps.apk.outputs.path }}" \
@@ -215,7 +223,22 @@ jobs:
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
             --jq '.assets[].name' | tee "$RUNNER_TEMP/assets.txt"
           grep -q '\.apk$' "$RUNNER_TEMP/assets.txt" || { echo "::error::Release has no APK asset"; exit 1; }
-          echo "Release $TAG carries an APK asset."
+
+          # Assert the contract the website depends on: /releases/latest must resolve to
+          # this tag. An untagged or draft release passes `gh release view` but 404s here,
+          # which silently breaks the Download APK button.
+          LATEST="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+          if [ "$LATEST" != "$TAG" ]; then
+            echo "::error::/releases/latest resolves to '$LATEST', not '$TAG'"
+            exit 1
+          fi
+
+          IS_DRAFT="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
+          if [ "$IS_DRAFT" != "false" ]; then
+            echo "::error::Release $TAG is still a draft"
+            exit 1
+          fi
+          echo "Release $TAG is published, carries an APK, and /releases/latest resolves to it."
 
       - name: Remove keystore
         if: always()
