@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -61,9 +62,23 @@ class NativeIntegrationTest {
         audio.setStreamVolume(AudioManager.STREAM_MUSIC, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) / 2, 0)
     }
 
+    private fun findNativeSlider(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (node.viewIdResourceName == "com.android.systemui:id/volume_row_slider") return node
+        for (index in 0 until node.childCount) {
+            val child = node.getChild(index) ?: continue
+            val match = findNativeSlider(child)
+            if (match != null) return match
+        }
+        return null
+    }
+
     private fun nativeVolumeHudMatches(state: VolumeState): Boolean = runCatching {
-        val slider = device.findObject(nativeVolumeSlider) ?: return false
-        val range = slider.getAccessibilityNodeInfo().rangeInfo ?: return false
+        val slider = instrumentation.uiAutomation.windows
+            .asSequence()
+            .mapNotNull { it.root }
+            .mapNotNull(::findNativeSlider)
+            .firstOrNull() ?: return false
+        val range = slider.rangeInfo ?: return false
         if (range.max <= range.min) return false
         val displayedFraction = (range.current - range.min) / (range.max - range.min)
         abs(displayedFraction - state.fraction) <= 0.02f
