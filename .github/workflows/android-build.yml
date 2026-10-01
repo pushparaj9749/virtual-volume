@@ -1,0 +1,91 @@
+name: Android CI
+
+# Continuous verification of the Android app: compile, unit tests, lint and both APK
+# variants. Signing and publishing live in release.yml so secrets are only ever touched
+# on a tagged release.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, test and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Report signing availability
+        run: gradle printReleaseSigningStatus
+
+      - name: Run unit tests
+        run: gradle testDebugUnitTest --stacktrace
+
+      - name: Run Android lint
+        run: gradle lintDebug
+
+      - name: Assemble debug APK
+        run: gradle assembleDebug
+
+      - name: Assemble release APK
+        run: gradle assembleRelease
+
+      - name: Verify build outputs
+        run: |
+          set -euo pipefail
+          test -f app/build/outputs/apk/debug/app-debug.apk
+          echo "Debug APK present:"
+          ls -la app/build/outputs/apk/debug/
+
+      - name: Upload unit test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report
+          path: android/app/build/reports/tests
+          if-no-files-found: ignore
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-report
+          path: android/app/build/reports/lint-results-debug.*
+          if-no-files-found: ignore
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: virtual-volume-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
