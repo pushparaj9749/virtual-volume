@@ -89,14 +89,17 @@ class OverlayControlViewTest {
         val recorder = Recorder()
         val view = buildView(recorder)
 
-        view.dispatchTouchEvent(down(60f, 400f, 0L))
-        view.dispatchTouchEvent(move(60f, 300f, 16L))
-        view.dispatchTouchEvent(up(60f, 300f, 32L))
+        view.dispatchTouchEvent(down(60f, 420f, 0L))
+        view.dispatchTouchEvent(move(60f, 360f, 16L))
+        view.dispatchTouchEvent(move(60f, 300f, 32L))
+        view.dispatchTouchEvent(move(60f, 240f, 48L))
+        view.dispatchTouchEvent(up(60f, 240f, 64L))
 
-        // The view must forward the drag into positive volume steps. Exact per-event
-        // capping is pinned in GestureEngineTest; here we prove the wiring end to end.
-        assertTrue("swipe up must raise the volume", recorder.steps.sum() > 0)
-        assertTrue(recorder.steps.all { it > 0 })
+        assertTrue(
+            "expected positive steps, got steps=${recorder.steps} " +
+                "starts=${recorder.starts} ends=${recorder.ends}",
+            recorder.steps.sum() > 0,
+        )
         assertEquals(1, recorder.starts)
         assertEquals(1, recorder.ends)
     }
@@ -140,16 +143,20 @@ class OverlayControlViewTest {
         val recorder = Recorder()
         val view = buildView(recorder)
 
-        view.dispatchTouchEvent(down(60f, 400f, 0L))
-        view.dispatchTouchEvent(move(60f, 300f, 16L))
-        val stepsBeforeCancel = recorder.steps.size
+        view.dispatchTouchEvent(down(60f, 420f, 0L))
+        view.dispatchTouchEvent(move(60f, 360f, 16L))
+        view.dispatchTouchEvent(move(60f, 300f, 32L))
+        val stepsBeforeCancel = recorder.steps.toList()
 
         view.dispatchTouchEvent(
-            MotionEvent.obtain(32L, 32L, MotionEvent.ACTION_CANCEL, 60f, 300f, 0),
+            MotionEvent.obtain(48L, 48L, MotionEvent.ACTION_CANCEL, 60f, 300f, 0),
         )
 
-        // A cancelled gesture must not add any further volume steps.
-        assertEquals(stepsBeforeCancel, recorder.steps.size)
+        assertEquals(
+            "cancel must not add steps (had $stepsBeforeCancel, now ${recorder.steps.toList()})",
+            stepsBeforeCancel,
+            recorder.steps.toList(),
+        )
         assertEquals(1, recorder.ends)
     }
 
