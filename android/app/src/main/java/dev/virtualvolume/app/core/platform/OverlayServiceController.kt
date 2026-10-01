@@ -33,6 +33,7 @@ class OverlayServiceController(context: Context, private val settings: SettingsR
             return OverlayStartResult.MissingOverlayPermission
         }
         requestedRunning = enabled
+        OverlayRuntime.reportError(null)
         settings.update { it.copy(enabled = enabled, serviceNotice = null) }
         val result = if (enabled) start() else { stop(); OverlayStartResult.Started }
         if (result is OverlayStartResult.Blocked) {

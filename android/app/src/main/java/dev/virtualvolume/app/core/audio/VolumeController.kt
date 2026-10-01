@@ -38,6 +38,7 @@ class VolumeController(private val backend: VolumeBackend) {
         val actual = snapshot(stream)
         if (!actual.available) return@runCatching VolumeResult.Failure("The audio service did not return a volume reading. Please retry.")
         _changes.tryEmit(actual)
+        if (actual.index == before.index) return@runCatching VolumeResult.Failure("Android kept the current level. Check safe-volume limits, Do Not Disturb, or your connected audio device.")
         VolumeResult.Success(actual, changed = actual.index != before.index)
     }.getOrElse {
         VolumeResult.Failure("Android blocked the volume change. Check Do Not Disturb or the connected audio device, then retry.")

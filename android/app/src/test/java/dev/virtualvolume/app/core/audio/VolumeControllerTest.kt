@@ -125,9 +125,10 @@ class VolumeControllerTest {
 
     @Test fun `safe volume or OEM ignored writes never appear as fake values`() {
         val backend = FakeBackend(current = 7, ignoreWrites = true)
-        val result = VolumeController(backend).setIndex(VolumeStreamType.MEDIA, 15) as VolumeResult.Success
-        assertEquals(7, result.state.index)
-        assertTrue(!result.changed)
+        val controller = VolumeController(backend)
+        val result = controller.setIndex(VolumeStreamType.MEDIA, 15)
+        assertTrue(result is VolumeResult.Failure)
+        assertEquals(7, controller.snapshot(VolumeStreamType.MEDIA).index)
     }
 
     @Test fun `fixed volume returns an actionable failure without a write`() {

@@ -169,6 +169,7 @@ class NativeIntegrationTest {
             assertNotNull(runBlocking { container.settingsRepository.settings.first() }.serviceNotice)
 
             shell("appops set ${app.packageName} SYSTEM_ALERT_WINDOW allow")
+            shell("am start -W -n ${app.packageName}/dev.virtualvolume.app.MainActivity")
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
             runBlocking { container.overlayServiceController.setEnabled(true) }
             waitFor("Explicit recovery succeeds") { OverlayRuntime.isServiceRunning.value }
