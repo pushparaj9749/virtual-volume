@@ -2,57 +2,66 @@ package dev.virtualvolume.app.core.platform
 
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import androidx.core.content.ContextCompat
+import dev.virtualvolume.app.core.data.SettingsRepository
 import dev.virtualvolume.app.overlay.OverlayService
+import dev.virtualvolume.app.tile.TileStateSync
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
-/** Why a start attempt did not (or did) succeed. Surfaced verbatim in the dashboard. */
 sealed interface OverlayStartResult {
     data object Started : OverlayStartResult
     data object MissingOverlayPermission : OverlayStartResult
     data class Blocked(val message: String) : OverlayStartResult
 }
 
-/**
- * The only place that starts or stops the overlay service, so permission checks and
- * failure reporting can never be forgotten by a caller.
- */
-class OverlayServiceController(private val context: Context) {
+/** Serializes app/tile toggles. A stop never starts a new service just to stop it. */
+class OverlayServiceController(context: Context, private val settings: SettingsRepository) {
+    private val app = context.applicationContext
+    private val mutex = Mutex()
+    private var requestedRunning = false
 
-    private val appContext: Context = context.applicationContext
+    suspend fun setEnabled(enabled: Boolean): OverlayStartResult = mutex.withLock { applyEnabled(enabled) }
 
-    fun start(): OverlayStartResult {
-        if (!OverlayPermission.isGranted(appContext)) {
+    suspend fun toggle(): OverlayStartResult = mutex.withLock {
+        applyEnabled(!(OverlayRuntime.isServiceRunning.value || requestedRunning))
+    }
+
+    private suspend fun applyEnabled(enabled: Boolean): OverlayStartResult {
+        if (enabled && !OverlayPermission.isGranted(app)) {
+            OverlayRuntime.reportError("Allow Display over other apps to enable the floating control.")
             return OverlayStartResult.MissingOverlayPermission
         }
-        return try {
-            ContextCompat.startForegroundService(
-                appContext,
-                Intent(appContext, OverlayService::class.java)
-                    .setAction(OverlayService.ACTION_START),
-            )
+        requestedRunning = enabled
+        settings.update { it.copy(enabled = enabled, serviceNotice = null) }
+        val result = if (enabled) start() else { stop(); OverlayStartResult.Started }
+        if (result is OverlayStartResult.Blocked) {
+            requestedRunning = false
+            settings.update { it.copy(enabled = false, serviceNotice = result.message) }
+        }
+        TileStateSync.refresh(app)
+        return result
+    }
+
+    /** Used only for a previously enabled service restart, including boot. */
+    fun start(): OverlayStartResult {
+        if (!OverlayPermission.isGranted(app)) return OverlayStartResult.MissingOverlayPermission
+        OverlayRuntime.reportError(null)
+        return runCatching {
+            ContextCompat.startForegroundService(app, Intent(app, OverlayService::class.java).setAction(OverlayService.ACTION_START))
             OverlayStartResult.Started
-        } catch (throwable: Throwable) {
-            // Android 12+ refuses background foreground-service starts in some situations.
-            // We never swallow this silently: the caller shows the message.
-            Log.w(TAG, "Overlay service start refused", throwable)
-            OverlayRuntime.reportError(throwable.message ?: throwable.javaClass.simpleName)
-            OverlayStartResult.Blocked(
-                throwable.message ?: throwable.javaClass.simpleName,
-            )
+        }.getOrElse {
+            val message = "Android blocked the service start. Open Virtual Volume and tap Resume control. If it repeats, check your phone's background/battery settings."
+            OverlayRuntime.reportError(message)
+            OverlayStartResult.Blocked(message)
         }
     }
 
     fun stop() {
-        runCatching {
-            appContext.startService(
-                Intent(appContext, OverlayService::class.java)
-                    .setAction(OverlayService.ACTION_STOP),
-            )
-        }.onFailure { Log.w(TAG, "Could not deliver stop", it) }
+        requestedRunning = false
+        runCatching { app.stopService(Intent(app, OverlayService::class.java)) }
+            .onFailure { OverlayRuntime.reportError("The service could not stop. Open the app and try again.") }
     }
 
-    companion object {
-        private const val TAG = "OverlayServiceCtl"
-    }
+    fun serviceStopped() { requestedRunning = false }
 }

@@ -38,6 +38,8 @@ internal object VolumeSettingsCodec {
     val KEY_AUDIO_STREAM = stringPreferencesKey("audio_stream")
     val KEY_TAP_MODE = stringPreferencesKey("tap_mode")
     val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+    val KEY_TILE_ADDED = booleanPreferencesKey("tile_added")
+    val KEY_SERVICE_NOTICE = stringPreferencesKey("service_notice")
     val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
 
     fun read(prefs: Preferences): VolumeSettings {
@@ -62,6 +64,8 @@ internal object VolumeSettingsCodec {
             tapMode = TapMode.fromName(prefs[KEY_TAP_MODE]),
             themeMode = ThemeMode.fromName(prefs[KEY_THEME_MODE]),
             onboardingCompleted = prefs[KEY_ONBOARDING_COMPLETED] ?: defaults.onboardingCompleted,
+            tileAdded = prefs[KEY_TILE_ADDED] ?: false,
+            serviceNotice = prefs[KEY_SERVICE_NOTICE],
         ).sanitized()
     }
 
@@ -85,6 +89,8 @@ internal object VolumeSettingsCodec {
         prefs[KEY_TAP_MODE] = settings.tapMode.name
         prefs[KEY_THEME_MODE] = settings.themeMode.name
         prefs[KEY_ONBOARDING_COMPLETED] = settings.onboardingCompleted
+        prefs[KEY_TILE_ADDED] = settings.tileAdded
+        settings.serviceNotice?.let { prefs[KEY_SERVICE_NOTICE] = it } ?: prefs.remove(KEY_SERVICE_NOTICE)
     }
 }
 

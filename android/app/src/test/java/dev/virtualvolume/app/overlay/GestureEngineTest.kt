@@ -122,7 +122,7 @@ class GestureEngineTest {
     }
 
     @Test
-    fun `a fast swipe is capped per event but catches up on release`() {
+    fun `a fast swipe is capped and lifting cannot replay a volume jump`() {
         val listener = RecordingListener()
         val engine = engine(listener) { 0L }
 
@@ -130,7 +130,7 @@ class GestureEngineTest {
         engine.onMove(y = 100f, at = 16L) // (300 - 20) - 100 = 180px = 9 steps wanted
         assertEquals(listOf(3), listener.steps)
         engine.onUp(y = 100f, at = 32L)
-        assertEquals(listOf(3, 3), listener.steps)
+        assertEquals(listOf(3), listener.steps)
     }
 
     @Test
@@ -145,11 +145,11 @@ class GestureEngineTest {
         engine.onMove(y = 160f, at = 32L) // still above the anchor: gives one step back
         assertEquals(listOf(2, -1), listener.steps)
 
-        engine.onMove(y = 220f, at = 48L) // now below the anchor: reversal, re-anchored
-        assertEquals(listOf(2, -1), listener.steps)
+        engine.onMove(y = 220f, at = 48L) // continued down: 60px = 3 steps
+        assertEquals(listOf(2, -1, -3), listener.steps)
 
-        engine.onMove(y = 260f, at = 64L) // 40px down from the new anchor = 2 steps down
-        assertEquals(listOf(2, -1, -2), listener.steps)
+        engine.onMove(y = 260f, at = 64L)
+        assertEquals(listOf(2, -1, -3, -2), listener.steps)
     }
 
     @Test
@@ -177,6 +177,57 @@ class GestureEngineTest {
         engine.onUp(y = 500f, at = 60L)
 
         assertEquals(listOf(1), listener.steps)
+    }
+
+    @Test
+    fun `a fast swipe with no move event is not mistaken for a tap`() {
+        val listener = RecordingListener()
+        val engine = engine(listener) { 0L }
+        engine.onDown(200f, 0L)
+        engine.onUp(100f, 100L)
+        assertEquals(false, listener.lastFromTap)
+        assertEquals(listOf(3), listener.steps)
+    }
+
+    @Test
+    fun `holding still after a capped swipe does not keep increasing`() {
+        val listener = RecordingListener()
+        val engine = engine(listener) { 0L }
+        engine.onDown(300f, 0L)
+        engine.onMove(0f, 16L)
+        repeat(10) { engine.onMove(0f, 32L + it) }
+        engine.onUp(0f, 200L)
+        assertEquals(listOf(3), listener.steps)
+    }
+
+    @Test
+    fun `reversal at a limit responds without unwinding a long drag`() {
+        val listener = RecordingListener()
+        val engine = engine(listener) { 0L }
+        engine.onDown(500f, 0L)
+        engine.onMove(200f, 16L)
+        engine.onMove(220f, 32L)
+        assertEquals(listOf(3, -1), listener.steps)
+    }
+
+    @Test
+    fun `split taps can use a rotated axis independently of screen up down`() {
+        val listener = RecordingListener()
+        val engine = engine(listener) { 0L }
+        engine.onDown(0f, 0L)
+        engine.onUp(0f, 100L, tapPosition = 170f)
+        assertEquals(listOf(-1), listener.steps)
+    }
+
+    @Test
+    fun `invalid coordinates cancel instead of sending bogus steps`() {
+        val listener = RecordingListener()
+        val engine = engine(listener) { 0L }
+        engine.onDown(200f, 0L)
+        engine.onMove(Float.NaN, 10L)
+        engine.onUp(200f, 20L)
+        assertTrue(listener.steps.isEmpty())
+        assertEquals(1, listener.ends)
     }
 
     @Test

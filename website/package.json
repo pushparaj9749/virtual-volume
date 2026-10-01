@@ -1,0 +1,23 @@
+{
+  "name": "virtual-volume-website",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The separate, privacy-first Virtual Volume product website",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "build": "node scripts/build.mjs",
+    "build:release": "node scripts/build.mjs --resolve-release",
+    "test": "node --test tests/*.test.mjs",
+    "test:e2e": "playwright test",
+    "check": "npm test && npm run build"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.2",
+    "@fontsource-variable/manrope": "5.2.8",
+    "@playwright/test": "1.56.1",
+    "@sparticuz/chromium": "138.0.2",
+    "esbuild": "0.25.10",
+    "sharp": "0.34.4"
+  }
+}

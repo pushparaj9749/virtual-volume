@@ -48,6 +48,11 @@ class VolumeMathTest {
         )
     }
 
+    @Test fun `large signed steps cannot overflow into the opposite direction`() {
+        assertEquals(15, VolumeMath.applyStep(7, Int.MAX_VALUE, Int.MAX_VALUE, 15))
+        assertEquals(0, VolumeMath.applyStep(7, Int.MIN_VALUE, Int.MAX_VALUE, 15))
+    }
+
     @Test
     fun `extreme settings stay inside sane bounds`() {
         assertEquals(

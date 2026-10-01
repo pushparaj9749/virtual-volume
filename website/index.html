@@ -1,434 +1,183 @@
 <!doctype html>
 <html lang="en" data-theme="dark">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Virtual Volume — your volume button, rebuilt for your screen</title>
-<meta name="description" content="Virtual Volume is a native Android utility that puts a thin, always-reachable volume control on the edge of your screen. Tap, swipe and drag to change the volume over any app.">
-<meta name="theme-color" content="#070A0F">
-<meta name="color-scheme" content="dark light">
-<link rel="canonical" href="https://pushparaj9749.github.io/virtual-volume/">
-<link rel="icon" href="./assets/img/favicon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="./assets/img/apple-touch-icon.png">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Virtual Volume">
-<meta property="og:title" content="Virtual Volume — your volume button, rebuilt for your screen">
-<meta property="og:description" content="A native Android utility that puts a thin, always-reachable volume control on the edge of your screen.">
-<meta property="og:url" content="https://pushparaj9749.github.io/virtual-volume/">
-<!-- Social crawlers resolve og:image against nothing, so it has to be an absolute URL. -->
-<meta property="og:image" content="https://pushparaj9749.github.io/virtual-volume/assets/img/hero-og.jpg">
-<meta property="og:image:width" content="1408">
-<meta property="og:image:height" content="768">
-<meta property="og:image:alt" content="A phone showing Virtual Volume's thin floating volume control on the right edge of the screen.">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:image" content="https://pushparaj9749.github.io/virtual-volume/assets/img/hero-og.jpg">
-<link rel="stylesheet" href="./assets/css/styles.css">
-<script src="./assets/js/main.js" defer></script>
-<script src="./assets/js/download.js" defer></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#101514">
+  <meta name="description" content="Your volume button, rebuilt for your screen. A native, privacy-first Android utility with a subtle floating control, smooth gestures and a Quick Settings tile.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.github.com; base-uri 'self'; form-action 'none'; object-src 'none'">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Virtual Volume — your volume, within reach.">
+  <meta property="og:description" content="Your volume button, rebuilt for your screen. Native Android. No ads. No tracking.">
+  <meta property="og:url" content="https://pushparaj9749.github.io/virtual-volume/">
+  <meta property="og:image" content="https://pushparaj9749.github.io/virtual-volume/assets/img/og-cover.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://pushparaj9749.github.io/virtual-volume/">
+  <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+  <link rel="preload" href="assets/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="assets/js/theme.js"></script>
+  <link rel="stylesheet" href="assets/css/styles.css">
+  <title>Virtual Volume — Your volume, within reach.</title>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
+<svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8 12 3 3 5-6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 15.5A9 9 0 0 1 8.5 4 9 9 0 1 0 20 15.5Z"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Zm12-1a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M20 8A8 8 0 1 0 20 16M20 3v5h-5"/><rect x="9" y="7" width="5" height="10" rx="1"/></symbol>
+  <symbol id="i-tap" viewBox="0 0 24 24"><path d="M9 12V5a2 2 0 0 1 4 0v7l1-1a2 2 0 0 1 3 0l2 2v4a4 4 0 0 1-4 4h-3l-6-7a2 2 0 0 1 3-2Z"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m7 7-5 5 5 5m10-10 5 5-5 5M14 4l-4 16"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+</svg>
 
 <header class="site-header">
   <div class="container header-inner">
-    <a class="brand" href="#top" aria-label="Virtual Volume home">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="26" height="26" fill="none">
-          <rect x="14.6" y="3.2" width="3" height="17.6" rx="1.5" fill="currentColor"/>
-          <rect x="4.4" y="7" width="8" height="2.4" rx="1.2" fill="currentColor" opacity=".95"/>
-          <rect x="6.9" y="11.2" width="5.5" height="2.4" rx="1.2" fill="currentColor" opacity=".7"/>
-          <rect x="9.4" y="15.4" width="3" height="2.4" rx="1.2" fill="currentColor" opacity=".45"/>
-        </svg>
-      </span>
-      <span class="brand-name">Virtual&nbsp;Volume</span>
+    <a class="brand" href="#top" aria-label="Virtual Volume, home">
+      <span class="brand-icon"><img src="assets/img/brand-mark.svg" width="28" height="28" alt=""></span>
+      <span>Virtual Volume<span class="brand-period">.</span></span>
     </a>
-
-    <nav class="site-nav" aria-label="Primary">
+    <nav id="main-nav" class="navigation" aria-label="Main navigation">
       <a href="#how-it-works">How it works</a>
       <a href="#features">Features</a>
-      <a href="#compatibility">Compatibility</a>
-      <a href="#faq">FAQ</a>
+      <a href="#privacy">Privacy</a>
     </nav>
-
     <div class="header-actions">
-      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch colour theme">
-        <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M18.6 5.4L17 7M7 17l-1.6 1.6"/></g></svg>
-        <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 14.4A8.4 8.4 0 0 1 9.6 4a8.4 8.4 0 1 0 10.4 10.4Z" fill="currentColor"/></svg>
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light theme" aria-pressed="false">
+        <svg class="icon sun-icon" aria-hidden="true"><use href="#i-sun"/></svg>
+        <svg class="icon moon-icon" aria-hidden="true"><use href="#i-moon"/></svg>
       </button>
-      <a class="btn btn-primary btn-sm" href="#download" data-download-link>
-        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>
-        Download APK
-      </a>
+      <a class="button button-header" href="#download">Get the app <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      <button class="menu-toggle" type="button" id="menu-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="main-nav"><svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg></button>
     </div>
   </div>
 </header>
 
 <main id="main">
-  <span id="top"></span>
-
-  <!-- 1. HERO -->
-  <section class="hero">
-    <div class="container hero-inner">
-      <div class="hero-copy">
-        <p class="eyebrow">Android utility · no ads, no analytics</p>
-        <h1>Virtual Volume</h1>
-        <p class="lead">Your volume button, rebuilt for your screen.</p>
-        <p class="hero-body">
-          A thin control lives on the edge of your display. Tap it, swipe it up, swipe it down,
-          or drag for a smooth sweep — over any app, without opening anything. It drives the real
-          hardware volume through the standard Android audio APIs.
-        </p>
-
-        <div class="hero-cta">
-          <a class="btn btn-primary" href="#download" data-download-link>
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>
-            Download APK
-          </a>
-          <a class="btn btn-ghost" href="#how-it-works">How it works</a>
-        </div>
-
-        <dl class="hero-facts">
-          <div><dt>Requires</dt><dd>Android 8.0+</dd></div>
-          <div><dt>Root</dt><dd>Not needed</dd></div>
-          <div><dt>Network access</dt><dd>None</dd></div>
-        </dl>
+  <section class="hero container" id="top" aria-labelledby="hero-title">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="small-status-dot"></span> A SMALL UTILITY. A BETTER EVERYDAY.</p>
+      <h1 id="hero-title">Your volume.<br><span>Within reach.</span></h1>
+      <p class="hero-tagline">Your volume button, rebuilt for your screen.</p>
+      <p class="hero-description">Meet Virtual Volume. A quiet little control at the edge of your phone. Tap to step. Swipe to adjust. Get back to what you were doing.</p>
+      <div class="hero-actions">
+        <a class="button button-primary" data-download-link href="https://github.com/pushparaj9749/virtual-volume/releases"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span data-download-label>View releases</span></a>
+        <a class="text-link" href="#how-it-works">See how it works <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a>
       </div>
+      <p class="hero-requirement"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg> Android 8.0+ <span>·</span> No root <span>·</span> Free &amp; open source</p>
+      <div class="hero-note"><span class="note-line"></span><p>Made to stay out of your way.<br><strong>There when you need it.</strong></p></div>
+    </div>
 
-      <div class="hero-visual">
-        <div class="device" id="hero-device" aria-hidden="true">
-          <div class="device-frame">
-            <div class="device-screen">
-              <div class="device-notch"></div>
-              <div class="fake-app">
-                <span class="fake-chip"></span>
-                <span class="fake-line w80"></span>
-                <span class="fake-line w60"></span>
-                <span class="fake-block"></span>
-                <span class="fake-line w70"></span>
-                <span class="fake-line w45"></span>
-              </div>
-              <div class="device-bar" id="hero-bar">
-                <span class="device-bar-track"></span>
-                <span class="device-bar-fill" id="hero-fill"></span>
-              </div>
+    <div class="hero-visual">
+      <div class="visual-orbit orbit-one" aria-hidden="true"></div>
+      <div class="visual-orbit orbit-two" aria-hidden="true"></div>
+      <div class="phone-wrap">
+        <div class="phone" id="hero-device">
+          <div class="phone-hardware hardware-one" aria-hidden="true"></div>
+          <div class="phone-hardware hardware-two" aria-hidden="true"></div>
+          <div class="phone-screen">
+            <div class="phone-status" aria-hidden="true"><span>9:41</span><span class="camera"></span><span class="status-signal">▂▄▆ <span class="battery"></span></span></div>
+            <div class="phone-content">
+              <div class="phone-app-heading"><span class="phone-brand"><img src="assets/img/brand-mark.svg" width="20" height="20" alt="">Virtual Volume</span><span class="phone-on"><span></span> ON</span></div>
+              <p class="phone-title">A little less effort.<br>A little more music.</p>
+              <div class="album-art"><img src="assets/img/edge-study.webp" srcset="assets/img/edge-study-small.webp 384w, assets/img/edge-study.webp 768w" sizes="230px" width="768" height="768" alt="Original jade ribbon artwork" fetchpriority="high"><span class="album-caption">EDGE STUDY / 01</span></div>
+              <div class="phone-volume-heading"><span>Media volume</span><output data-volume-percent>67<span>%</span></output></div>
+              <div class="phone-meter" aria-hidden="true"><span data-volume-meter></span></div>
+              <div class="phone-setting"><span>Physical edge</span><strong>Right</strong></div>
+              <div class="phone-setting"><span>Haptic feedback</span><span class="mini-toggle" aria-hidden="true"></span></div>
+              <div class="phone-footer">NO ADS. JUST YOUR SOUND.</div>
             </div>
+            <div id="hero-control" class="floating-control" role="slider" tabindex="0" aria-label="Simulated media volume" aria-valuemin="0" aria-valuemax="15" aria-valuenow="10" aria-describedby="hero-demo-label"><span class="control-track"><span class="control-fill" data-control-fill></span></span></div>
+            <span class="home-indicator" aria-hidden="true"></span>
           </div>
-          <p class="visual-caption">Try it — drag the line on the right edge.</p>
         </div>
+        <div class="edge-callout" aria-hidden="true"><span class="callout-line"></span><span>Your new<br><strong>volume rocker.</strong></span></div>
+        <div class="gesture-callout" aria-hidden="true"><span class="gesture-arrow">↑</span><div><strong>Swipe up. Sound up.</strong><span>It's that natural.</span></div></div>
       </div>
+      <p class="visual-caption" id="hero-demo-label"><span class="small-status-dot"></span> INTERACTIVE PREVIEW <span class="caption-separator">/</span> Drag the edge line</p>
+      <p class="simulation-note">Browser demo only — it doesn't change your device's volume.</p>
     </div>
   </section>
 
-  <!-- 2. HOW IT WORKS -->
-  <section class="section" id="how-it-works">
+  <div class="trust-strip">
+    <div class="container trust-items">
+      <span><svg class="icon" aria-hidden="true"><use href="#i-tap"/></svg> Native Android</span>
+      <span><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg> Private by design</span>
+      <span><svg class="icon" aria-hidden="true"><use href="#i-code"/></svg> Open source</span>
+      <span><svg class="icon" aria-hidden="true"><use href="#i-volume"/></svg> Real volume. Real control.</span>
+    </div>
+  </div>
+
+  <section class="section container" id="how-it-works" aria-labelledby="how-title">
+    <div class="section-heading">
+      <div><p class="eyebrow">01 / GET COMFORTABLE</p><h2 id="how-title">A minute of setup.<br>A simpler every day.</h2></div>
+      <p>Five guided screens. One small permission.<br>Then your volume is always close at hand.</p>
+    </div>
+    <ol class="setup-grid">
+      <li class="setup-card reveal"><div class="setup-illustration permission-illustration" aria-hidden="true"><span class="permission-icon"><img src="assets/img/brand-mark.svg" width="28" height="28" alt=""></span><div><strong>Display over other apps</strong><span>Virtual Volume</span></div><span class="mini-toggle"></span></div><span class="step-number">01</span><h3>Give it a place to live.</h3><p>Allow “Display over other apps”. The control uses a compact touch area, not an invisible sheet over your screen.</p></li>
+      <li class="setup-card reveal"><div class="setup-illustration enable-illustration" aria-hidden="true"><span class="enabled-ring"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg></span><div><strong>Virtual Volume is active</strong><span>Ready when you are.</span></div></div><span class="step-number">02</span><h3>Switch on. Carry on.</h3><p>Enable the lightweight service. A quiet notification keeps its status visible and gives you an easy off switch.</p></li>
+      <li class="setup-card reveal"><div class="setup-illustration gesture-illustration" aria-hidden="true"><span class="gesture-demo-line"></span><span class="illustration-arrow">↑</span><span class="gesture-touch"></span><div><strong>Tap. Swipe. That's it.</strong><span>Your thumb already knows.</span></div></div><span class="step-number">03</span><h3>Make yourself at home.</h3><p>Try the real gestures in the tutorial. Choose your edge, fine-tune the feel, and manually add the Quick Settings tile.</p></li>
+    </ol>
+  </section>
+
+  <section class="section features-section" id="features" aria-labelledby="features-title">
     <div class="container">
-      <header class="section-head reveal">
-        <p class="eyebrow">How it works</p>
-        <h2>Three steps, then forget about it</h2>
-        <p class="section-sub">Setup takes under a minute and the app walks you through every step on first launch.</p>
-      </header>
-
-      <ol class="steps">
-        <li class="card reveal">
-          <span class="step-index">1</span>
-          <h3>Allow the overlay</h3>
-          <p>Android calls it “Display over other apps”. It is the only permission Virtual Volume needs to draw the control above your current app.</p>
-        </li>
-        <li class="card reveal">
-          <span class="step-index">2</span>
-          <h3>Enable the control</h3>
-          <p>A lightweight foreground service keeps the control available. Android requires a quiet notification for that, and it doubles as your off switch.</p>
-        </li>
-        <li class="card reveal">
-          <span class="step-index">3</span>
-          <h3>Use the edge</h3>
-          <p>The line sits on the left or right edge, wherever you put it. Tap the top half to raise, the bottom half to lower, or drag to sweep.</p>
-        </li>
-      </ol>
-    </div>
-  </section>
-
-  <!-- 3. FEATURES -->
-  <section class="section section-alt" id="features">
-    <div class="container">
-      <header class="section-head reveal">
-        <p class="eyebrow">Features</p>
-        <h2>Built like the button it replaces</h2>
-      </header>
-
-      <div class="feature-grid">
-        <article class="card reveal">
-          <h3>Subtle until you touch it</h3>
-          <p>Idle opacity, active opacity, length and thickness are all yours. The default is translucent — never invisible, never in the way.</p>
-        </article>
-        <article class="card reveal">
-          <h3>Stays put when you rotate</h3>
-          <p>Position is stored relative to the current screen, not as raw coordinates, so the control keeps its edge and its spot in portrait and both landscape orientations.</p>
-        </article>
-        <article class="card reveal">
-          <h3>Only as big as it needs to be</h3>
-          <p>The touch window is a narrow strip on the edge — there is no invisible sheet covering your screen, so the rest of the app underneath stays fully usable.</p>
-        </article>
-        <article class="card reveal">
-          <h3>Real volume, real limits</h3>
-          <p>Every change goes through <code>AudioManager</code> and is clamped to the device's actual range. Nothing is simulated and nothing is cached.</p>
-        </article>
-        <article class="card reveal">
-          <h3>Quick Settings tile</h3>
-          <p>Add the tile once and switch the control on or off straight from the notification shade, in perfect sync with the app.</p>
-        </article>
-        <article class="card reveal">
-          <h3>Designed against accidents</h3>
-          <p>A touch-slop dead zone, a per-event step cap and reversal re-anchoring mean a resting thumb or a pocket will not move your volume.</p>
-        </article>
-        <article class="card reveal">
-          <h3>Optional haptics</h3>
-          <p>One short tick per level, like the detent on a physical rocker. Turn it off, or keep it — it never fires more than it should.</p>
-        </article>
-        <article class="card reveal">
-          <h3>Dark-first, light optional</h3>
-          <p>A calm dark interface with an optional light theme, Material 3 typography and accessible contrast throughout.</p>
-        </article>
-        <article class="card reveal">
-          <h3>Media today, more later</h3>
-          <p>Media volume is the default because it is what you reach for most. Ring, alarm, notification, call and system streams are already modelled.</p>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- 4. GESTURE DEMO -->
-  <section class="section" id="gesture-demo">
-    <div class="container demo-inner">
-      <div class="demo-copy reveal">
-        <p class="eyebrow">Gesture demonstration</p>
-        <h2>Feel the gesture here</h2>
-        <p class="section-sub">
-          This is a browser simulation of the same gesture engine that runs on the phone:
-          a dead zone before a drag starts, a per-event step cap so a fast flick cannot
-          teleport the volume, and reversal that responds immediately.
-        </p>
-        <ul class="demo-legend">
-          <li><kbd>Tap top half</kbd> raise one step</li>
-          <li><kbd>Tap bottom half</kbd> lower one step</li>
-          <li><kbd>Drag</kbd> smooth continuous change</li>
-        </ul>
-        <p class="demo-note" id="demo-status" role="status" aria-live="polite">Idle — the control is waiting for a touch.</p>
-      </div>
-
-      <div class="demo-stage reveal">
-        <div class="demo-readout">
-          <span class="readout-label">Media volume</span>
-          <span class="readout-value" id="demo-value">8<span>/ 15</span></span>
-          <div class="readout-meter" aria-hidden="true"><span id="demo-meter"></span></div>
-        </div>
-        <div class="demo-control" id="demo-control" tabindex="0" role="slider"
-             aria-label="Simulated volume control" aria-valuemin="0" aria-valuemax="15" aria-valuenow="8">
-          <span class="demo-track"></span>
-          <span class="demo-fill" id="demo-fill"></span>
-          <span class="demo-hint" aria-hidden="true"></span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 5. COMPATIBILITY -->
-  <section class="section section-alt" id="compatibility">
-    <div class="container">
-      <header class="section-head reveal">
-        <p class="eyebrow">Compatibility</p>
-        <h2>What Android allows, stated plainly</h2>
-        <p class="section-sub">Virtual Volume implements the maximum Android officially permits — and says so when the platform draws a line.</p>
-      </header>
-
-      <div class="compat-grid">
-        <div class="card reveal">
-          <h3 class="compat-ok">Works</h3>
-          <ul class="tick-list">
-            <li>Android 8.0 (API 26) and newer</li>
-            <li>Over ordinary apps, games and browsers</li>
-            <li>Portrait, landscape and both landscape rotations</li>
-            <li>Restores itself after a reboot when you allow it</li>
-            <li>Phones and tablets, any screen size or density</li>
-          </ul>
-        </div>
-        <div class="card reveal">
-          <h3 class="compat-no">Restricted by Android</h3>
-          <ul class="cross-list">
-            <li><strong>Screen off.</strong> Touch events are not delivered to overlays while the display is powered down. No app can change this, and Virtual Volume does not pretend otherwise.</li>
-            <li><strong>Lock screen and secure surfaces.</strong> Payment sheets and some system dialogs hide every overlay by design.</li>
-            <li><strong>Background starts on Android 12+.</strong> Occasionally the system refuses a restart after boot; opening the app or tapping the tile brings it straight back.</li>
-            <li><strong>OEM battery rules.</strong> Some skins need an exemption from battery optimisation.</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="card requirements reveal">
-        <h3>Requirements</h3>
-        <table class="spec-table">
-          <tbody>
-            <tr><th scope="row">Android version</th><td>8.0 (Oreo, API 26) or newer</td></tr>
-            <tr><th scope="row">Root</th><td>Not required</td></tr>
-            <tr><th scope="row">Permissions</th><td>Display over other apps · Foreground service · Notifications (Android 13+) · Vibration</td></tr>
-            <tr><th scope="row">Internet permission</th><td>Not requested — the app cannot talk to the network</td></tr>
-            <tr><th scope="row">Install</th><td>APK sideload; allow “install unknown apps” for your browser once</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- 6. QUICK SETTINGS -->
-  <section class="section" id="quick-settings">
-    <div class="container qs-inner">
-      <div class="qs-copy reveal">
-        <p class="eyebrow">Quick Settings</p>
-        <h2>One tap from the shade</h2>
-        <p class="section-sub">
-          Add the Virtual Volume tile once and the control is a swipe away. The tile reads the
-          same state as the app, so the two can never disagree.
-        </p>
-        <ol class="mini-steps">
-          <li>Swipe down twice to open the full Quick Settings panel.</li>
-          <li>Tap the pencil (Edit) icon.</li>
-          <li>Drag <strong>Virtual Volume</strong> into your active tiles.</li>
-        </ol>
-        <p class="footnote">Android does not let an app add a tile to your panel by itself — that step is always yours.</p>
-      </div>
-
-      <div class="qs-visual reveal" aria-hidden="true">
-        <div class="qs-panel">
-          <div class="qs-row">
-            <span class="qs-tile"><i></i>Wi-Fi</span>
-            <span class="qs-tile"><i></i>Bluetooth</span>
-            <span class="qs-tile"><i></i>Torch</span>
+      <div class="section-heading"><div><p class="eyebrow">02 / LESS FRICTION. MORE FEEL.</p><h2 id="features-title">Small by design.<br>Thoughtful in every detail.</h2></div><p>Not another thing to manage.<br>Just a better way to reach your volume.</p></div>
+      <div class="bento-grid">
+        <article class="bento-card gesture-card reveal" id="gesture-demo">
+          <div><span class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#i-tap"/></svg></span><h3>A gesture, not a detour.</h3><p>Tap the upper half to raise a step, the lower half to lower. Drag up or down to find just the right level. No jumps on first touch.</p><span class="small-label">TRY THE LINE →</span></div>
+          <div class="volume-demo">
+            <div class="demo-readout"><span class="readout-eyebrow">MEDIA VOLUME</span><output id="demo-value" data-volume-percent>67<span>%</span></output><span class="demo-level" id="demo-level">10 / 15 levels</span></div>
+            <div class="demo-control floating-control" id="demo-control" role="slider" tabindex="0" aria-label="Interactive simulated volume control" aria-valuemin="0" aria-valuemax="15" aria-valuenow="10" aria-describedby="demo-status"><span class="control-track"><span class="control-fill" data-control-fill></span></span></div>
+            <p class="demo-status" id="demo-status" role="status">Try a tap or a swipe. This is a browser simulation.</p>
           </div>
-          <div class="qs-row">
-            <span class="qs-tile qs-active"><i class="qs-glyph"></i>Virtual Volume</span>
-            <span class="qs-tile"><i></i>DND</span>
-            <span class="qs-tile"><i></i>Rotate</span>
-          </div>
-          <div class="qs-meta">ON = the floating control is live on your edge</div>
-        </div>
+        </article>
+        <article class="bento-card rotation-card reveal">
+          <span class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#i-rotate"/></svg></span><h3>Same edge. Any angle.</h3><p>Rotate your phone. The control follows its physical side, not yesterday's screen coordinates.</p>
+          <div class="rotation-stage" aria-hidden="true"><div class="rotation-phone" id="rotation-phone"><span class="rotation-camera"></span><span class="rotation-bar"></span><span class="rotation-screen-line"></span><span class="rotation-screen-line second"></span></div><span class="rotation-stage-label">PHYSICAL RIGHT EDGE</span></div>
+          <div class="orientation-buttons" role="group" aria-label="Preview physical edge in different orientations"><button type="button" data-rotation="0" aria-pressed="true">Portrait</button><button type="button" data-rotation="90" aria-pressed="false">Landscape left</button><button type="button" data-rotation="270" aria-pressed="false">Landscape right</button></div>
+          <p class="sr-only" id="rotation-status" role="status">Portrait: the control is on the right edge.</p>
+        </article>
+        <article class="bento-card subtle-card reveal"><span class="feature-icon"><span class="line-icon"></span></span><h3>Present. Never pushy.</h3><p>A translucent line at rest. A little brighter under your finger. Adjust its length, thickness, opacity and compact touch zone to suit your hand.</p><div class="opacity-preview" aria-hidden="true"><div><span class="idle-example"></span><small>AT REST</small></div><span class="opacity-arrow">→</span><div><span class="active-example"></span><small>IN YOUR HANDS</small></div></div></article>
+        <article class="bento-card detail-card reveal"><span class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#i-volume"/></svg></span><h3>Your phone. Your feel.</h3><p>Real Android audio control, with Media as the default. Choose your tap step, swipe sensitivity, optional haptic ticks and animation timing.</p><div class="detail-tags"><span>Media first</span><span>Optional haptics</span><span>Dark &amp; light</span></div><div class="detail-footer"><span class="small-status-dot"></span> LOCAL SETTINGS. REMEMBERED.</div></article>
       </div>
     </div>
   </section>
 
-  <!-- 7. PRIVACY -->
-  <section class="section section-alt" id="privacy">
-    <div class="container privacy-inner">
-      <header class="section-head reveal">
-        <p class="eyebrow">Privacy</p>
-        <h2>Nothing leaves your phone</h2>
-      </header>
-      <div class="privacy-grid">
-        <div class="card reveal"><h3>No analytics</h3><p>No events, no crash reporting, no third-party SDKs. There is nothing to report because nothing is collected.</p></div>
-        <div class="card reveal"><h3>No accounts</h3><p>No sign-in, no email, no identity of any kind.</p></div>
-        <div class="card reveal"><h3>No network permission</h3><p>The app manifest does not request internet access, so it could not send data even if it tried.</p></div>
-        <div class="card reveal"><h3>Local settings only</h3><p>Your preferences live in the app's private storage and are restored by the normal Android backup if you choose to use it.</p></div>
-      </div>
-      <p class="footnote reveal">This website is static and loads no trackers, no analytics and no third-party requests. The download button talks to the GitHub API to find the newest release.</p>
+  <section class="section container quick-section" id="quick-settings" aria-labelledby="quick-title">
+    <div class="quick-visual reveal">
+      <div class="qs-panel" aria-hidden="true"><div class="qs-header"><span>Quick Settings</span><span>✎</span></div><div class="qs-grid"><div class="qs-tile"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg><span>Wi-Fi</span></div><div class="qs-tile"><svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg><span>Display</span></div><div class="qs-tile qs-volume"><img src="assets/img/brand-mark.svg" width="26" height="26" alt=""><div><strong>Virtual Volume</strong><span>On</span></div><span class="qs-indicator"></span></div><div class="qs-tile"><svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg><span>Focus</span></div></div><div class="qs-brightness"><span></span></div><span class="qs-bottom-label">ONE TILE. INSTANT ACCESS.</span></div>
     </div>
+    <div class="quick-copy"><p class="eyebrow">03 / ONE SWIPE AWAY</p><h2 id="quick-title">On when you want it.<br>Off when you don't.</h2><p>No need to open the app. The Virtual Volume tile switches the floating control on and off, in sync with your dashboard.</p><ol class="inline-steps"><li><span>1</span> Swipe down twice.</li><li><span>2</span> Tap Edit or the pencil.</li><li><span>3</span> Drag Virtual Volume into your active tiles.</li></ol><p class="fine-print">You add the tile yourself. We never insert it into your panel.</p></div>
   </section>
 
-  <!-- 8. FAQ -->
-  <section class="section" id="faq">
-    <div class="container">
-      <header class="section-head reveal">
-        <p class="eyebrow">FAQ</p>
-        <h2>Questions worth answering</h2>
-      </header>
+  <section class="privacy-section" id="privacy" aria-labelledby="privacy-title"><div class="container privacy-inner"><div class="privacy-mark" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg></div><div><p class="eyebrow">04 / YOUR SOUND. NOT YOUR DATA.</p><h2 id="privacy-title">A volume button doesn't<br>need to know who you are.</h2><p>No account. No ads. No analytics. The Android app has no internet permission — your settings stay on your device.</p><a class="text-link" href="https://github.com/pushparaj9749/virtual-volume" target="_blank" rel="noopener noreferrer">Don't take our word for it. Read the source. <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><ul class="privacy-checks"><li><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>No network access in the app</li><li><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>No tracking or advertising SDKs</li><li><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>No product analytics on this site</li><li><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Self-hosted fonts and artwork</li></ul></div></section>
 
-      <div class="faq reveal">
-        <details>
-          <summary>Does it work while the screen is off?</summary>
-          <p>No, and no Android app can. When the display is powered down the system stops delivering touch events to overlays. Virtual Volume keeps its service and your settings alive, and the control reappears — correctly positioned, even if you rotated while the screen was off — the moment the display turns back on.</p>
-        </details>
-        <details>
-          <summary>Why does it need the “Display over other apps” permission?</summary>
-          <p>Because the whole point is that the control is reachable while you are inside another app. Android gates that behind <code>SYSTEM_ALERT_WINDOW</code>. You can revoke it at any time from system settings; the app detects that and tells you instead of failing silently.</p>
-        </details>
-        <details>
-          <summary>Why is there a permanent notification?</summary>
-          <p>Android requires a visible notification for any foreground service — it is how the system tells you something is running in the background. The notification is silent, has no sound or badge, and its “Turn off” action stops the control instantly.</p>
-        </details>
-        <details>
-          <summary>Will it drain my battery?</summary>
-          <p>The overlay is a small, hardware-accelerated view that draws only when it changes. There is no polling loop, no wake lock and no background work while you are not touching it.</p>
-        </details>
-        <details>
-          <summary>Can it change ringer or alarm volume?</summary>
-          <p>Media volume is the default. Ring, alarm, notification, call and system streams are modelled in the app already and can be switched on in the Audio section.</p>
-        </details>
-        <details>
-          <summary>Is it on Google Play?</summary>
-          <p>The APK is published directly from this repository's GitHub Releases. Every build is produced by CI from the published source and signed with the release key, so what you download is reproducible from the code you can read.</p>
-        </details>
-        <details>
-          <summary>How do I move or resize the control?</summary>
-          <p>Open the app and use the Control section: edge, position, length, thickness, idle opacity, active opacity, touch-area size and swipe sensitivity all update the live control immediately — and the in-app preview is the real control, not a mock-up.</p>
-        </details>
-        <details>
-          <summary>What if my phone's OEM blocks it?</summary>
-          <p>Some skins add their own rules on top of Android. Exclude Virtual Volume from battery optimisation and make sure “Display over other apps” is allowed. If a start is refused, the app surfaces the system's reason on the dashboard rather than hiding it.</p>
-        </details>
-      </div>
-    </div>
-  </section>
+  <section class="section container compatibility-section" id="compatibility" aria-labelledby="compatibility-title"><div><p class="eyebrow">05 / BUILT FOR ANDROID. HONEST ABOUT ANDROID.</p><h2 id="compatibility-title">A useful utility.<br>Not a workaround.</h2><p class="section-description">Made for Android 8.0 (API 26) and newer, on devices that allow “Display over other apps”. No root or accessibility service required.</p><a class="text-link" href="#faq">A few things worth knowing <svg class="icon" aria-hidden="true"><use href="#i-arrow"/></svg></a></div><div class="compatibility-notes"><article><span class="note-index">01</span><div><h3>Screen on means control on.</h3><p>Normal apps can't receive arbitrary touch gestures while the display is powered off. The service preserves its state where allowed; the line returns when you wake and unlock.</p></div></article><article><span class="note-index">02</span><div><h3>Some screens stay protected.</h3><p>Secure apps, payment screens and system permission dialogs may hide overlays. Android's security rules always take priority.</p></div></article><article><span class="note-index">03</span><div><h3>Your phone has the final say.</h3><p>Battery policies and background-start restrictions can pause the service. Open the app or tap the tile to resume. Reboot restoration is opt-in and best effort.</p></div></article></div></section>
 
-  <!-- 9. DOWNLOAD -->
-  <section class="section section-alt" id="download">
-    <div class="container">
-      <div class="download-card reveal">
-        <div class="download-copy">
-          <p class="eyebrow">Download</p>
-          <h2>Get Virtual Volume</h2>
-          <p class="section-sub" id="release-summary">Checking GitHub Releases for the latest build…</p>
-          <a class="btn btn-primary btn-lg" id="download-cta" href="https://github.com/pushparaj9749/virtual-volume/releases/latest" data-download-link>
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>
-            <span id="download-cta-label">Download APK</span>
-          </a>
-          <p class="footnote">
-            <span id="release-meta"></span>
-            <a class="text-link" href="https://github.com/pushparaj9749/virtual-volume/releases">All releases</a> ·
-            <a class="text-link" href="https://github.com/pushparaj9749/virtual-volume">Source code</a>
-          </p>
-        </div>
+  <section class="section container faq-section" id="faq" aria-labelledby="faq-title"><div><p class="eyebrow">06 / GOOD QUESTIONS</p><h2 id="faq-title">A little more clarity.</h2><p>Everything you should know<br>before it lives on your screen.</p></div><div class="faq-list">
+    <details><summary>Is this a native Android app?<svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></summary><div>Yes. The app is built in Kotlin with Jetpack Compose and Material 3. The floating control is a native Android window and changes real media volume through AudioManager. This website is a separate product — there is no WebView in the app.</div></details>
+    <details><summary>What permissions does it need?<svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></summary><div>“Display over other apps” lets the compact control appear above ordinary apps. Android also requires a foreground service and its notification. Notification permission on Android 13+ is optional but recommended for the off switch. Optional haptics use vibration; optional reboot restoration uses the boot broadcast. The app requests no internet, microphone or accessibility permission.</div></details>
+    <details><summary>What happens if my volume buttons are broken?<svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></summary><div>Virtual Volume is a software alternative while your screen is on and unlocked. It can adjust the phone's media volume without touching the physical rocker. It isn't a hardware repair and can't replace buttons for power-off menus, recovery mode or arbitrary screen-off input.</div></details>
+    <details><summary>Will it get in the way of other apps?<svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></summary><div>The interactive window stays compact around the line. Everything outside it remains available to the app underneath. You can adjust its size and position, or turn it off from the tile or notification when you need that exact part of the edge.</div></details>
+    <details><summary>How do I install the APK?<svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></summary><div>Download the signed APK on your Android phone and open it. Android may ask you to allow your browser or file manager to “Install unknown apps”. Allow that source only if you trust it, then follow the five-screen setup. Release checksums are available on GitHub. Always install updates signed with the same release key.</div></details>
+    <details><summary>Does it collect any personal information?<svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></summary><div>No product analytics, accounts, cloud sync or tracking. Preferences are stored locally in Android DataStore, with app cloud backup disabled. This website remembers only your theme choice in your browser. GitHub hosts the site and APKs and may keep standard delivery logs; the site uses GitHub's public release API to find downloads.</div></details>
+    <details><summary>Why can't I see the control on my phone?<svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></summary><div>Check overlay permission, wake and unlock the screen, then open the app and tap Resume control. Protected apps can intentionally hide it. Some Android Go devices don't allow this overlay permission at all. If your manufacturer's battery policy stops it, use the tile or the app to resume; the app never bypasses Android's restrictions.</div></details>
+  </div></section>
 
-        <ol class="install-steps">
-          <li><strong>Download</strong> the APK on your phone.</li>
-          <li><strong>Allow</strong> your browser to install unknown apps when Android asks — this is the standard prompt for any APK outside Play.</li>
-          <li><strong>Open</strong> Virtual Volume and follow the five-step setup.</li>
-          <li><strong>Grant</strong> “Display over other apps”, then enable the control.</li>
-        </ol>
-      </div>
-    </div>
-  </section>
+  <section class="download-section" id="download" aria-labelledby="download-title"><div class="container download-inner"><div class="download-copy"><span class="download-brand"><img src="assets/img/brand-mark.svg" width="38" height="38" alt=""></span><p class="eyebrow">SMALL APP. EVERYDAY DIFFERENCE.</p><h2 id="download-title">Make room for<br>a little more control.</h2><p>Your volume button, rebuilt for your screen.<br>Free, private, and made for your Android.</p></div><div class="download-panel"><span class="download-platform"><span class="small-status-dot"></span> FOR ANDROID 8.0+</span><h3>Virtual Volume</h3><p id="release-summary" role="status">Checking for a verified, signed release.</p><a class="button button-primary download-button" data-download-link href="https://github.com/pushparaj9749/virtual-volume/releases"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span data-download-label>View releases</span><svg class="icon button-end-icon" aria-hidden="true"><use href="#i-arrow"/></svg></a><p class="release-meta" id="release-meta">Distributed through GitHub Releases</p><a class="release-notes-link" id="release-notes" href="https://github.com/pushparaj9749/virtual-volume/releases">Release notes &amp; checksum <span>↗</span></a><p class="download-hint">Install the APK, grant overlay permission, and follow the guide. No signup. No subscription.</p><noscript><p>JavaScript is disabled. Open GitHub Releases to check available signed APKs and checksums.</p></noscript></div></div></section>
 </main>
 
-<footer class="site-footer">
-  <div class="container footer-inner">
-    <div class="footer-brand">
-      <span class="brand-mark small" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-          <rect x="14.6" y="3.2" width="3" height="17.6" rx="1.5" fill="currentColor"/>
-          <rect x="4.4" y="7" width="8" height="2.4" rx="1.2" fill="currentColor" opacity=".95"/>
-          <rect x="6.9" y="11.2" width="5.5" height="2.4" rx="1.2" fill="currentColor" opacity=".7"/>
-          <rect x="9.4" y="15.4" width="3" height="2.4" rx="1.2" fill="currentColor" opacity=".45"/>
-        </svg>
-      </span>
-      <span>Virtual Volume</span>
-    </div>
-    <nav class="footer-nav" aria-label="Footer">
-      <a href="#how-it-works">How it works</a>
-      <a href="#features">Features</a>
-      <a href="#compatibility">Compatibility</a>
-      <a href="#privacy">Privacy</a>
-      <a href="#faq">FAQ</a>
-      <a href="https://github.com/pushparaj9749/virtual-volume">GitHub</a>
-    </nav>
-    <p class="footer-note">A native Android app and a static website. No trackers, no accounts, no telemetry.</p>
-  </div>
-</footer>
+<footer class="site-footer"><div class="container footer-top"><a class="brand" href="#top" aria-label="Virtual Volume, back to top"><span class="brand-icon"><img src="assets/img/brand-mark.svg" width="28" height="28" alt=""></span><span>Virtual Volume<span class="brand-period">.</span></span></a><span class="footer-tagline">A quiet upgrade to your everyday.</span><nav aria-label="Footer navigation"><a href="#privacy">Privacy</a><a href="#faq">FAQ</a><a href="https://github.com/pushparaj9749/virtual-volume" target="_blank" rel="noopener noreferrer">Source <span>↗</span></a></nav></div><div class="container footer-bottom"><span>© 2026 Virtual Volume. Open source under MIT.</span><span>Built for Android. Designed to stay out of the way.</span></div></footer>
+<script type="module" src="assets/js/main.js"></script>
+<script type="module" src="assets/js/download.js"></script>
 </body>
 </html>

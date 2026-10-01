@@ -1,16 +1,11 @@
 name: Android CI
 
-# Continuous verification of the Android app: compile, unit tests, lint and both APK
-# variants. Signing and publishing live in release.yml so secrets are only ever touched
-# on a tagged release.
-#
-# On failure this job re-runs the failing Gradle invocation and posts the compiler / test
-# output as a PR comment, so the exact diagnostics are available without downloading logs.
-
 on:
   push:
-    branches: [main]
+    branches: [main, 'arena/**']
+    paths: ['android/**', 'tools/**', '.github/workflows/android-build.yml']
   pull_request:
+    paths: ['android/**', 'tools/**', '.github/workflows/android-build.yml']
   workflow_dispatch:
 
 permissions:
@@ -18,165 +13,123 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: android-ci-${{ github.ref }}
+  group: android-ci-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
-
-env:
-  ANDROID_HOME: /usr/local/lib/android/sdk
-  ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
 jobs:
   build:
-    name: Build, test and lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    defaults:
-      run:
-        working-directory: android
-
+    name: Build, unit tests & lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Report toolchain
-        run: |
-          set -euo pipefail
-          java -version
-          echo "ANDROID_HOME=${ANDROID_HOME}"
-          test -d "${ANDROID_HOME}" || { echo "Android SDK directory is missing"; exit 1; }
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+      - uses: gradle/actions/wrapper-validation@v4
+      - name: Install pinned SDK components
+        run: |
+          test -d "$ANDROID_HOME"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
 
-      - name: Report signing availability
-        run: gradle :app:printReleaseSigningStatus --console=plain
-
-      - name: Compile main sources
-        run: gradle :app:compileDebugKotlin --console=plain
-
-      - name: Compile unit tests
-        run: gradle :app:compileDebugUnitTestKotlin --console=plain
-
-      - name: Run unit tests
-        run: gradle :app:testDebugUnitTest --console=plain
-
-      - name: Run Android lint
-        run: gradle :app:lintDebug --console=plain
-
-      - name: Assemble debug APK
-        run: gradle :app:assembleDebug --console=plain
-
-      - name: Assemble release APK
-        run: gradle :app:assembleRelease --console=plain
-
-      - name: Verify build outputs
+      - name: Build and verify both variants
+        working-directory: android
         run: |
           set -euo pipefail
-          test -f app/build/outputs/apk/debug/app-debug.apk
-          echo "Debug APK present:"
-          ls -la app/build/outputs/apk/debug/
-
-      - name: Upload unit test report
+          ./gradlew :app:testDebugUnitTest :app:lintDebug :app:lintRelease :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest -PallowUnsignedRelease=true --console=plain --stacktrace 2>&1 | tee "$RUNNER_TEMP/android-checks.log"
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          test -s app/build/outputs/apk/release/app-release-unsigned.apk
+      - name: Publish reports and build artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: unit-test-report
-          path: android/app/build/reports/tests
-          if-no-files-found: ignore
-
-      - name: Upload lint report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lint-report
-          path: android/app/build/reports/lint-results-debug.*
-          if-no-files-found: ignore
-
-      - name: Upload debug APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: virtual-volume-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-
-      # Publish the compiler / test diagnostics as a PR comment so they can be read
-      # without downloading the raw run logs.
-      #
-      # The assertion messages live in the JUnit XML, not in Gradle's console output, so
-      # they are extracted from there: a bare "AssertionError at File.kt:103" tells you
-      # where a test died but not what it expected.
-      - name: Publish failure diagnostics
+          name: android-verification
+          path: |
+            android/app/build/reports/
+            android/app/build/test-results/
+            android/app/build/outputs/apk/
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Report actionable failure diagnostics
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
-          gradle :app:testDebugUnitTest :app:compileDebugKotlin :app:compileDebugUnitTestKotlin :app:lintDebug --continue --console=plain > /tmp/gradle-fail.log 2>&1 || true
-          {
-            echo '### Android CI — diagnostics'
-            echo
-            echo '#### Failing tests'
-            echo
-            XML_DIR="app/build/test-results/testDebugUnitTest"
-            if compgen -G "$XML_DIR/*.xml" > /dev/null; then
-              echo '```text'
-              python3 - "$XML_DIR" <<'PY'
-          import glob, os, sys, xml.etree.ElementTree as ET
-          total = failed = 0
-          for path in sorted(glob.glob(os.path.join(sys.argv[1], "*.xml"))):
-              root = ET.parse(path).getroot()
-              for case in root.iter("testcase"):
-                  total += 1
-                  for kind in ("failure", "error"):
-                      for node in case.findall(kind):
-                          failed += 1
-                          print(f"{case.get('classname')} > {case.get('name')}")
-                          text = (node.get("message") or "").strip()
-                          body = (node.text or "").strip()
-                          print("  message : " + (text or "(none)"))
-                          for line in body.splitlines():
-                              if "dev.virtualvolume" in line or "AssertionError" in line:
-                                  print("  at      : " + line.strip())
-                          print()
-          print(f"{failed} failed / {total} tests")
-          PY
-              echo '```'
-            else
-              echo '_No JUnit XML was produced — the build failed before tests ran._'
-            fi
-            echo
-            echo '#### Android lint'
-            echo
-            LINT_TXT="app/build/reports/lint-results-debug.txt"
-            if [ -f "$LINT_TXT" ]; then
-              echo '```text'
-              grep -E 'Error:|Warning:|errors?, ' "$LINT_TXT" | head -80 || true
-              echo '```'
-            else
-              echo '_No lint text report was produced._'
-            fi
-            echo
-            echo '#### Compiler / build output'
-            echo
-            echo '```text'
-            grep -E 'e: |error:|FAILED|warning: ' /tmp/gradle-fail.log | head -60 || true
-            echo '---'
-            tail -n 40 /tmp/gradle-fail.log
-            echo '```'
-          } > /tmp/comment.md
-          REF="${GITHUB_REF}"
-          if [[ "$REF" == refs/pull/* ]]; then
-            NUM="$(echo "$REF" | cut -d/ -f3)"
-            gh pr comment "$NUM" --repo "$GITHUB_REPOSITORY" --body-file /tmp/comment.md || true
-          else
-            cat /tmp/comment.md
+          python3 tools/ci_diagnostics.py > "$RUNNER_TEMP/diagnostics.md"
+          cat "$RUNNER_TEMP/diagnostics.md"
+          if [ -z "${PR_NUMBER:-}" ]; then PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" --json number --jq '.[0].number // empty'); fi
+          if [ -n "${PR_NUMBER:-}" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/diagnostics.md" || true
+          fi
+
+  emulator:
+    name: Device integration · API ${{ matrix.api }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 35]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Enable hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run native device integration tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -memory 2048
+          script: |
+            cd android
+            trap 'adb shell dumpsys window windows > "$RUNNER_TEMP/window-state.txt"; adb logcat -d > "$RUNNER_TEMP/device-log.txt"; mkdir -p ../.qa/screenshots; adb pull /sdcard/Android/data/dev.virtualvolume.app.debug/files/qa ../.qa/screenshots || true' EXIT
+            ./gradlew :app:connectedDebugAndroidTest --console=plain --stacktrace
+            adb shell dumpsys window windows > "$RUNNER_TEMP/window-state.txt"
+            adb logcat -d > "$RUNNER_TEMP/device-log.txt"
+            mkdir -p ../.qa/screenshots
+            adb pull /sdcard/Android/data/dev.virtualvolume.app.debug/files/qa ../.qa/screenshots || true
+      - name: Upload device test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: device-qa-api-${{ matrix.api }}
+          include-hidden-files: true
+          path: |
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+            .qa/screenshots/
+            ${{ runner.temp }}/window-state.txt
+            ${{ runner.temp }}/device-log.txt
+          retention-days: 14
+      - name: Report device test failures
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          python3 tools/ci_diagnostics.py > "$RUNNER_TEMP/device-diagnostics.md"
+          cat "$RUNNER_TEMP/device-diagnostics.md"
+          if [ -z "${PR_NUMBER:-}" ]; then PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" --json number --jq '.[0].number // empty'); fi
+          if [ -n "${PR_NUMBER:-}" ]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/device-diagnostics.md" || true
           fi

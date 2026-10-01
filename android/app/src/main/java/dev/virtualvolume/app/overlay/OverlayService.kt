@@ -1,17 +1,23 @@
 package dev.virtualvolume.app.overlay
 
+import android.app.AppOpsManager
+import android.app.KeyguardManager
+import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.ComponentCallbacks
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.hardware.display.DisplayManager
-import android.app.NotificationManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import android.os.PowerManager
+import android.view.View
 import android.view.ViewConfiguration
+import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import dev.virtualvolume.app.R
@@ -22,7 +28,6 @@ import dev.virtualvolume.app.core.data.VolumeSettings
 import dev.virtualvolume.app.core.data.VolumeStreamType
 import dev.virtualvolume.app.core.platform.OverlayPermission
 import dev.virtualvolume.app.core.platform.OverlayRuntime
-import dev.virtualvolume.app.di.AppContainer
 import dev.virtualvolume.app.tile.TileStateSync
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,300 +35,214 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 
-/**
- * Keeps the floating volume control on screen.
- *
- * Lifecycle notes, because they are the part Android is strict about:
- *  - The window is added in [onCreate] and removed in [onDestroy]; nothing outlives the
- *    service, so there is no leaked overlay if the app is killed.
- *  - Position is recomputed — never remembered as raw coordinates — whenever the
- *    configuration, the display or the screen state changes, which is what keeps the
- *    control on the correct edge after a rotation.
- *  - When the display is off the service simply stays alive and keeps its state. Android
- *    does not deliver touch events to overlays while the panel is powered down, and this
- *    app does not pretend otherwise.
- */
+/** User-enabled, special-use foreground service. No wake locks, hidden APIs or restart loops. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class OverlayService : LifecycleService() {
-
-    private lateinit var container: AppContainer
-
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val mainHandler = Handler(Looper.getMainLooper())
-
-    private val windowHost: OverlayWindowHost by lazy { OverlayWindowHost(this) }
-    private var controlView: OverlayControlView? = null
-
+    private val handler = Handler(Looper.getMainLooper())
+    private val container by lazy { appContainer }
+    private val windowHost by lazy { OverlayWindowHost(this) }
+    private var control: OverlayControlView? = null
     private var settings = VolumeSettings.DEFAULT
     private var volume = VolumeState.UNKNOWN
-    private var hasReceivedSettings = false
-    private var lastNotifiedStream: VolumeStreamType? = null
-
+    private var stopping = false
+    private var notifiedStream: VolumeStreamType? = null
     private var screenReceiver: BroadcastReceiver? = null
     private var displayListener: DisplayManager.DisplayListener? = null
-    private var componentCallbacks: ComponentCallbacks? = null
-
-    private val gestureListener = object : GestureListener {
-        override fun onGestureStart() {
-            refreshVolume()
-        }
-
-        override fun onStep(deltaSteps: Int, fromTap: Boolean) = applyStep(deltaSteps, fromTap)
-
-        override fun onGestureEnd() = Unit
-    }
+    private var configListener: ComponentCallbacks? = null
+    private var permissionListener: AppOpsManager.OnOpChangedListener? = null
 
     override fun onCreate() {
         super.onCreate()
-        container = appContainer
-
         OverlayNotification.ensureChannel(this)
-        startForeground(OverlayNotification.NOTIFICATION_ID, OverlayNotification.build(this))
-
-        OverlayRuntime.setServiceRunning(true)
-        OverlayRuntime.reportError(null)
-        TileStateSync.refresh(this)
-
-        if (!OverlayPermission.isGranted(this)) {
-            Log.w(TAG, "Overlay permission is missing; the control cannot be shown")
-            OverlayRuntime.reportError(getString(R.string.error_overlay_revoked_body))
-            stopSelf()
+        val foreground = runCatching {
+            ServiceCompat.startForeground(this, OverlayNotification.NOTIFICATION_ID,
+                OverlayNotification.build(this),
+                if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0)
+        }.isSuccess
+        if (!foreground) {
+            failAndStop("Android could not start the foreground service. Open Virtual Volume and enable it again.")
             return
         }
-
-        attachControl()
-        observeSettings()
-        observeVolume()
         registerSystemListeners()
+        observeSettings()
+        observeAudio()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-        return when (intent?.action) {
-            ACTION_STOP -> {
+        if (intent?.action == ACTION_STOP) {
+            // Notification OFF must also persist OFF, otherwise a sticky restart/boot revives it.
+            stopping = true
+            scope.launch {
+                runCatching { container.settingsRepository.update { it.copy(enabled = false, serviceNotice = null) } }
                 stopSelf()
-                START_NOT_STICKY
             }
+            return START_NOT_STICKY
+        }
+        return START_STICKY // The first DataStore emission still gates every restart.
+    }
 
-            else -> START_STICKY
+    private fun observeSettings() = scope.launch {
+        try {
+            container.settingsRepository.settings.collect { latest ->
+                settings = latest
+                if (stopping) return@collect
+                if (!latest.enabled) { stopSelf(); return@collect }
+                if (!OverlayPermission.isGranted(this@OverlayService)) {
+                    failAndStop(getString(R.string.error_overlay_revoked_body))
+                    return@collect
+                }
+                if (control == null) {
+                    control = OverlayControlView(windowHost.windowContext).apply {
+                        listener = object : GestureListener {
+                            override fun onGestureStart() = refreshVolume()
+                            override fun onStep(deltaSteps: Int, fromTap: Boolean) = applyStep(deltaSteps, fromTap)
+                            override fun onGestureEnd() = Unit
+                        }
+                    }
+                    applySettings()
+                    if (!windowHost.attach(control!!, placement())) {
+                        failAndStop("Android could not display the control. Check overlay permission, then tap Resume control in the app.")
+                        return@collect
+                    }
+                    OverlayRuntime.setPlacement(placement())
+                    OverlayRuntime.setServiceRunning(true)
+                    OverlayRuntime.reportError(null)
+                    TileStateSync.refresh(this@OverlayService)
+                } else applySettings()
+                setScreenVisibility()
+                if (notifiedStream != latest.audioStream) {
+                    notifiedStream = latest.audioStream
+                    runCatching { getSystemService(NotificationManager::class.java)?.notify(OverlayNotification.NOTIFICATION_ID,
+                        OverlayNotification.build(this@OverlayService, getString(R.string.notification_text_stream, latest.audioStream.label))) }
+                }
+            }
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            failAndStop("Settings could not be read. Reopen Virtual Volume and retry; your control is safely stopped.")
         }
     }
 
-    override fun onDestroy() {
-        unregisterSystemListeners()
-        windowHost.detach()
-        controlView = null
-        scope.cancel()
-        OverlayRuntime.setServiceRunning(false)
-        OverlayRuntime.reportError(null)
-        TileStateSync.refresh(this)
-        super.onDestroy()
+    private fun observeAudio() = scope.launch {
+        container.settingsRepository.settings.map { it.audioStream }.distinctUntilChanged().flatMapLatest { stream ->
+            merge(container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it).index },
+                container.volumeController.changes.filter { it.stream == stream }.map { it.index })
+        }.collect { refreshVolume() }
     }
 
-    // region setup
+    private fun refreshVolume() {
+        volume = container.volumeController.snapshot(settings.audioStream)
+        if (volume.available) control?.setLevel(volume.fraction, animate = false)
+        configureGesture()
+    }
 
-    private fun attachControl() {
-        val view = OverlayControlView(this).apply {
-            listener = gestureListener
+    private fun applyStep(delta: Int, fromTap: Boolean) {
+        when (val result = container.volumeController.changeBy(settings.audioStream, delta, settings.volumeStep)) {
+            is VolumeResult.Success -> {
+                volume = result.state
+                control?.setLevel(volume.fraction, animate = fromTap)
+                if (result.changed && settings.hapticsEnabled) container.haptics.tick()
+                OverlayRuntime.reportError(null)
+            }
+            is VolumeResult.Failure -> OverlayRuntime.reportError(result.message)
         }
-        controlView = view
-        applySettings(settings)
+    }
+
+    private fun applySettings() {
+        val view = control ?: return
+        view.style = ControlSpecFactory.style(settings, windowHost.windowContext.resources.displayMetrics.density)
+        view.physicalEdge = settings.edge
         refreshVolume()
-        if (!windowHost.attach(view, currentPlacement())) {
-            OverlayRuntime.reportError(getString(R.string.error_overlay_revoked_body))
+        reposition()
+    }
+
+    private fun configureGesture() {
+        control?.gestureConfig = ControlSpecFactory.gestureConfig(settings,
+            windowHost.windowContext.resources.displayMetrics.density, volume.max - volume.min,
+            ViewConfiguration.get(windowHost.windowContext).scaledTouchSlop)
+    }
+
+    private fun placement(): WindowPlacement = OverlayLayoutResolver.resolve(windowHost.currentBounds(),
+        ControlSpecFactory.placement(settings, windowHost.windowContext.resources.displayMetrics.density),
+        windowHost.windowContext.resources.displayMetrics.density)
+
+    private fun reposition() {
+        if (stopping || !windowHost.isAttached) return
+        if (!OverlayPermission.isGranted(this)) { failAndStop(getString(R.string.error_overlay_revoked_body)); return }
+        val resolved = placement()
+        if (!windowHost.updatePlacement(resolved)) failAndStop("Android could not reposition the control. Open the app and enable it again.")
+        else OverlayRuntime.setPlacement(resolved)
+    }
+
+    private fun setScreenVisibility() {
+        val usable = getSystemService(PowerManager::class.java)?.isInteractive != false &&
+            getSystemService(KeyguardManager::class.java)?.isKeyguardLocked != true
+        if (!usable) control?.cancelGesture()
+        control?.visibility = if (usable) View.VISIBLE else View.GONE
+        if (usable) { reposition(); refreshVolume() }
+    }
+
+    private fun failAndStop(message: String) {
+        if (stopping) return
+        stopping = true
+        OverlayRuntime.reportError(message)
+        scope.launch {
+            runCatching { container.settingsRepository.update { it.copy(serviceNotice = message) } }
             stopSelf()
         }
     }
 
-    private fun observeSettings() {
-        scope.launch {
-            container.settingsRepository.settings.collect { latest ->
-                val wasEnabled = hasReceivedSettings && settings.enabled
-                hasReceivedSettings = true
-                settings = latest
-                applySettings(latest)
-
-                if (wasEnabled && !latest.enabled) {
-                    // Turned off from the dashboard or the Quick Settings tile.
-                    stopSelf()
-                }
-            }
-        }
-    }
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private fun observeVolume() {
-        scope.launch {
-            container.settingsRepository.settings
-                .map { it.audioStream }
-                .distinctUntilChanged()
-                .flatMapLatest { stream ->
-                    container.audioVolumeMonitor.observe(stream) { candidate ->
-                        container.volumeController.snapshot(candidate).index
-                    }
-                }
-                .collect { index ->
-                    // Re-read the whole snapshot: max volume can differ per stream and
-                    // per output device, so it is never assumed from the last reading.
-                    if (index >= 0) refreshVolume()
-                }
-        }
-    }
-
-    // endregion
-
-    // region gesture handling
-
-    private fun refreshVolume() {
-        val snapshot = container.volumeController.snapshot(settings.audioStream)
-        if (snapshot.index < 0) return
-        volume = snapshot
-        controlView?.setLevel(snapshot.fraction, animate = false)
-    }
-
-    private fun applyStep(deltaSteps: Int, fromTap: Boolean) {
-        val result = container.volumeController.changeBy(
-            stream = settings.audioStream,
-            deltaSteps = deltaSteps,
-            stepSize = settings.volumeStep,
-        )
-        when (result) {
-            is VolumeResult.Success -> {
-                volume = result.state
-                controlView?.setLevel(result.state.fraction, animate = fromTap)
-                if (settings.hapticsEnabled) container.haptics.tick()
-            }
-
-            is VolumeResult.Failure -> {
-                Log.w(TAG, "Volume change refused: ${result.message}")
-                OverlayRuntime.reportError(result.message)
-            }
-        }
-    }
-
-    // endregion
-
-    // region configuration changes
-
     private fun registerSystemListeners() {
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                when (intent.action) {
-                    Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> {
-                        if (!OverlayPermission.isGranted(this@OverlayService)) {
-                            OverlayRuntime.reportError(
-                                getString(R.string.error_overlay_revoked_body),
-                            )
-                            stopSelf()
-                            return
-                        }
-                        // Rotation and density can change while the panel is off, so the
-                        // position is resolved again instead of trusted.
-                        reposition()
-                        refreshVolume()
-                    }
-                }
-            }
+        screenReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) = setScreenVisibility()
+        }.also { receiver ->
+            ContextCompat.registerReceiver(this, receiver, IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT)
+            }, ContextCompat.RECEIVER_NOT_EXPORTED)
         }
-        ContextCompat.registerReceiver(
-            this,
-            receiver,
-            IntentFilter().apply {
-                addAction(Intent.ACTION_SCREEN_ON)
-                addAction(Intent.ACTION_USER_PRESENT)
-            },
-            ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
-        screenReceiver = receiver
-
-        val listener = object : DisplayManager.DisplayListener {
+        displayListener = object : DisplayManager.DisplayListener {
             override fun onDisplayAdded(displayId: Int) = Unit
             override fun onDisplayRemoved(displayId: Int) = Unit
-            override fun onDisplayChanged(displayId: Int) = reposition()
-        }
-        getSystemService(DisplayManager::class.java)
-            ?.registerDisplayListener(listener, mainHandler)
-        displayListener = listener
-
-        val callbacks = object : ComponentCallbacks {
-            override fun onConfigurationChanged(newConfig: Configuration) = reposition()
+            override fun onDisplayChanged(displayId: Int) { applySettings(); setScreenVisibility() }
+        }.also { getSystemService(DisplayManager::class.java)?.registerDisplayListener(it, handler) }
+        configListener = object : ComponentCallbacks {
+            override fun onConfigurationChanged(newConfig: Configuration) { applySettings(); setScreenVisibility() }
             override fun onLowMemory() = Unit
+        }.also { registerComponentCallbacks(it) }
+        permissionListener = AppOpsManager.OnOpChangedListener { op, pkg ->
+            if (op == AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW && pkg == packageName) handler.post {
+                if (!OverlayPermission.isGranted(this)) failAndStop(getString(R.string.error_overlay_revoked_body))
+            }
+        }.also { listener ->
+            runCatching { getSystemService(AppOpsManager::class.java)?.startWatchingMode(AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW, packageName, listener) }
         }
-        registerComponentCallbacks(callbacks)
-        componentCallbacks = callbacks
     }
 
-    private fun unregisterSystemListeners() {
+    override fun onDestroy() {
         screenReceiver?.let { runCatching { unregisterReceiver(it) } }
-        screenReceiver = null
-        displayListener?.let { listener ->
-            runCatching { getSystemService(DisplayManager::class.java)?.unregisterDisplayListener(listener) }
-        }
-        displayListener = null
-        componentCallbacks?.let { runCatching { unregisterComponentCallbacks(it) } }
-        componentCallbacks = null
-    }
-
-    /** Resolves the stored relative placement against the current screen. */
-    private fun reposition() {
-        if (controlView == null) return
-        val density = resources.displayMetrics.density
-        val bounds = windowHost.currentBounds()
-        if (bounds.widthPx <= 0 || bounds.heightPx <= 0) return
-        val placement = OverlayLayoutResolver.resolve(
-            bounds = bounds,
-            placement = ControlSpecFactory.placement(settings, density),
-            density = density,
-        )
-        if (!placement.isValid) return
-        windowHost.updatePlacement(placement)
-    }
-
-    // endregion
-
-    private fun applySettings(newSettings: VolumeSettings) {
-        val density = resources.displayMetrics.density
-        val view = controlView ?: return
-        view.style = ControlSpecFactory.style(newSettings, density)
-        view.gestureConfig = ControlSpecFactory.gestureConfig(
-            settings = newSettings,
-            density = density,
-            maxVolume = volume.max.takeIf { it > 0 }
-                ?: container.volumeController.snapshot(newSettings.audioStream).max,
-            touchSlopPx = ViewConfiguration.get(this).scaledTouchSlop,
-        )
-        reposition()
-        publishStreamInNotification(newSettings)
-    }
-
-    private fun publishStreamInNotification(newSettings: VolumeSettings) {
-        if (newSettings.audioStream == lastNotifiedStream) return
-        lastNotifiedStream = newSettings.audioStream
-        val subtitle = getString(R.string.notification_text_stream, newSettings.audioStream.label)
-        val manager = getSystemService(NotificationManager::class.java) ?: return
-        runCatching {
-            manager.notify(
-                OverlayNotification.NOTIFICATION_ID,
-                OverlayNotification.build(this, subtitle),
-            )
-        }
-    }
-
-    private fun currentPlacement(): WindowPlacement {
-        val density = resources.displayMetrics.density
-        return OverlayLayoutResolver.resolve(
-            bounds = windowHost.currentBounds(),
-            placement = ControlSpecFactory.placement(settings, density),
-            density = density,
-        )
+        displayListener?.let { getSystemService(DisplayManager::class.java)?.unregisterDisplayListener(it) }
+        configListener?.let { unregisterComponentCallbacks(it) }
+        permissionListener?.let { runCatching { getSystemService(AppOpsManager::class.java)?.stopWatchingMode(it) } }
+        handler.removeCallbacksAndMessages(null)
+        windowHost.detach()
+        control = null
+        scope.cancel()
+        container.overlayServiceController.serviceStopped()
+        OverlayRuntime.setPlacement(null)
+        OverlayRuntime.setServiceRunning(false)
+        TileStateSync.refresh(this)
+        ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        super.onDestroy()
     }
 
     companion object {
-        private const val TAG = "OverlayService"
-
         const val ACTION_START = "dev.virtualvolume.app.action.START"
         const val ACTION_STOP = "dev.virtualvolume.app.action.STOP"
     }

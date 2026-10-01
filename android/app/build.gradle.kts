@@ -1,6 +1,5 @@
 import java.util.Properties
 import org.gradle.api.tasks.testing.Test
-import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     alias(libs.plugins.android.application)
@@ -25,7 +24,6 @@ val keystoreProperties = Properties().apply {
 
 fun signingProperty(propertyKey: String, envKey: String): String? =
     (keystoreProperties.getProperty(propertyKey) ?: System.getenv(envKey))
-        ?.trim()
         ?.takeIf { it.isNotEmpty() }
 
 val releaseStoreFilePath = signingProperty("storeFile", "ANDROID_KEYSTORE_FILE")
@@ -33,6 +31,12 @@ val releaseStoreFile = releaseStoreFilePath?.let { rootProject.file(it) }?.takeI
 val releaseStorePassword = signingProperty("storePassword", "ANDROID_KEYSTORE_PASSWORD")
 val releaseKeyAlias = signingProperty("keyAlias", "ANDROID_KEY_ALIAS")
 val releaseKeyPassword = signingProperty("keyPassword", "ANDROID_KEY_PASSWORD")
+
+val appVersion = Properties().apply { rootProject.file("version.properties").inputStream().use { load(it) } }
+val appVersionCode = appVersion.getProperty("versionCode").toInt()
+val appVersionName = appVersion.getProperty("versionName")
+require(appVersionCode > 0 && Regex("[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?").matches(appVersionName)) { "Invalid semantic version in version.properties" }
+val allowUnsignedRelease = providers.gradleProperty("allowUnsignedRelease").orNull == "true"
 
 val hasReleaseSigning = releaseStoreFile != null &&
     !releaseStorePassword.isNullOrBlank() &&
@@ -47,8 +51,8 @@ android {
         applicationId = "dev.virtualvolume.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -111,7 +115,7 @@ android {
     lint {
         abortOnError = true
         warningsAsErrors = false
-        checkReleaseBuilds = false
+        checkReleaseBuilds = true
         sarifReport = true
         // A plain-text report is what CI can grep and paste into a failure comment;
         // SARIF alone is not readable without a viewer.
@@ -145,6 +149,7 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.coroutines.android)
@@ -157,6 +162,10 @@ dependencies {
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }
 
 // Print full assertion details for failing unit tests. Gradle's default console output
@@ -180,3 +189,14 @@ tasks.register("printReleaseSigningStatus") {
         println("Key alias present: ${!releaseKeyAlias.isNullOrBlank()}")
     }
 }
+
+// Fail closed: CI may explicitly compile an unsigned release, but it can never publish it.
+val validateReleaseSigning by tasks.registering {
+    doLast {
+        check(hasReleaseSigning || allowUnsignedRelease) {
+            "Release signing is required. Provide the documented signing environment, or use -PallowUnsignedRelease=true for verification only."
+        }
+        if (hasReleaseSigning) check(releaseKeyAlias == "virtual-volume") { "The release key alias must be virtual-volume." }
+    }
+}
+tasks.matching { it.name == "preReleaseBuild" }.configureEach { dependsOn(validateReleaseSigning) }

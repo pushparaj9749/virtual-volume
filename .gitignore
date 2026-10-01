@@ -36,3 +36,17 @@ website/dist/
 # --- Logs / temp ---
 *.log
 *.tmp
+
+# Local QA/downloaded artifacts (never source)
+.qa/
+.artifacts/
+.toolchain/
+**/test-results/
+website/playwright-report/
+website/.test-output/
+website/.pages/
+# Encrypted or encoded signing backups are still sensitive
+*keystore*.base64
+*keystore*.b64
+# The official Gradle wrapper is required build tooling, not an app binary
+!android/gradle/wrapper/gradle-wrapper.jar

@@ -1,5 +1,8 @@
 package dev.virtualvolume.app.ui.onboarding
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -85,6 +88,7 @@ fun OnboardingScreen(
     modifier: Modifier = Modifier,
 ) {
     var step by rememberSaveable { mutableIntStateOf(0) }
+    BackHandler(enabled = step > 0 || isReplay) { if (step > 0) step -= 1 else onFinish() }
 
     Column(
         modifier = modifier
@@ -146,7 +150,7 @@ fun OnboardingScreen(
                     onGrant = onRequestOverlayPermission,
                 )
 
-                2 -> EnableStep(running = state.controlActive, onEnable = onEnable)
+                2 -> EnableStep(running = state.controlActive, error = state.runtimeError, onEnable = onEnable)
                 3 -> TutorialStep(state = state, onPreviewStep = onPreviewStep)
                 else -> QuickSettingsStep()
             }
@@ -215,31 +219,23 @@ private fun StepScaffold(
     footer: @Composable () -> Unit = {},
     visual: @Composable BoxScope.() -> Unit,
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(top = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            contentAlignment = Alignment.Center,
-            content = visual,
-        )
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(18.dp))
-        footer()
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val visualHeight = (maxHeight * 0.5f).coerceIn(150.dp, 300.dp)
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(Modifier.fillMaxWidth().height(visualHeight), contentAlignment = Alignment.Center, content = visual)
+            Spacer(Modifier.height(20.dp))
+            Text(title, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center)
+            Spacer(Modifier.height(10.dp))
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center)
+            Spacer(Modifier.height(18.dp))
+            footer()
+            Spacer(Modifier.height(8.dp))
+        }
     }
 }
 
@@ -247,8 +243,9 @@ private fun StepScaffold(
 private fun WelcomeStep(settings: VolumeSettings, state: UiState) {
     StepScaffold(
         title = "Virtual Volume",
-        body = "Your volume button, rebuilt for your screen. A thin control sits on the edge of the " +
-            "display, ready over any app — you never have to open anything.",
+        body = "Your volume button, rebuilt for your screen. A thin, translucent control stays near your " +
+            "physical volume buttons, over other apps where Android allows it. No root. No ads. Just your sound.",
+        footer = { Text("Welcome · Made for Android", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) },
     ) {
         HeroPreview(
             settings = settings,
@@ -264,8 +261,8 @@ private fun PermissionStep(granted: Boolean, onGrant: () -> Unit) {
     StepScaffold(
         title = "Allow drawing over other apps",
         body = "The control has to sit on top of whatever you are doing, so Android asks for one " +
-            "permission: “Display over other apps”. Nothing else is needed, and nothing leaves " +
-            "the phone.",
+            "permission: “Display over other apps”. It only draws a compact edge control. Your settings stay " +
+            "on this phone; the app has no network access.",
         footer = {
             OutlinedButton(
                 onClick = onGrant,
@@ -332,7 +329,7 @@ private fun PermissionStep(granted: Boolean, onGrant: () -> Unit) {
 }
 
 @Composable
-private fun EnableStep(running: Boolean, onEnable: () -> Unit) {
+private fun EnableStep(running: Boolean, error: String?, onEnable: () -> Unit) {
     StepScaffold(
         title = "Turn Virtual Volume on",
         body = "A small background service keeps the control available while you use other apps. " +
@@ -347,6 +344,7 @@ private fun EnableStep(running: Boolean, onEnable: () -> Unit) {
             ) {
                 Text(if (running) "Running" else "Enable Virtual Volume")
             }
+            error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
         },
     ) {
         NotificationPreview(running = running)
@@ -376,7 +374,7 @@ private fun QuickSettingsStep() {
         title = "Add it to Quick Settings",
         body = "For instant access, add Virtual Volume to Quick Settings: swipe down twice, tap the " +
             "pencil, then drag the Virtual Volume tile into your panel. Tapping the tile turns the " +
-            "control on and off — Android does not let an app add a tile for you.",
+            "control on and off. Adding a tile is always your choice; the editor can look different on your phone.",
     ) {
         QuickSettingsMock()
     }

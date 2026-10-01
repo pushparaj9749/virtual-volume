@@ -4,6 +4,13 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -93,7 +100,7 @@ fun SwitchRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(enabled = enabled) { onCheckedChange(!checked) }
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -115,7 +122,7 @@ fun SwitchRow(
         Spacer(Modifier.width(16.dp))
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            onCheckedChange = null,
             enabled = enabled,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
@@ -160,7 +167,7 @@ fun SliderRow(
             onValueChangeFinished = onValueChangeFinished,
             valueRange = valueRange,
             steps = steps,
-            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp).semantics { contentDescription = label },
             colors = SliderDefaults.colors(
                 thumbColor = MaterialTheme.colorScheme.primary,
                 activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -192,7 +199,7 @@ fun <T> SegmentedChoiceRow(
                 .fillMaxWidth()
                 .clip(MaterialTheme.shapes.small)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                .padding(4.dp),
+                .padding(4.dp).selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             options.forEach { option ->
@@ -218,7 +225,8 @@ fun <T> SegmentedChoiceRow(
                         .weight(1f)
                         .clip(MaterialTheme.shapes.extraSmall)
                         .background(background)
-                        .clickable { onSelect(option) }
+                        .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(option) })
+                        .heightIn(min = 48.dp)
                         .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -333,7 +341,8 @@ fun <T> ChoiceChipRow(
                         .clip(shape)
                         .background(background)
                         .border(1.dp, border, shape)
-                        .clickable { onSelect(option) }
+                        .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(option) })
+                        .heightIn(min = 48.dp)
                         .padding(horizontal = 16.dp, vertical = 9.dp),
                 ) {
                     Text(
