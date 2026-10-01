@@ -63,7 +63,7 @@ class NativeIntegrationTest {
 
     private fun nativeVolumeHudMatches(state: VolumeState): Boolean = runCatching {
         val slider = device.findObject(nativeVolumeSlider) ?: return false
-        val range = slider.accessibilityNodeInfo.rangeInfo ?: return false
+        val range = slider.getAccessibilityNodeInfo().rangeInfo ?: return false
         if (range.max <= range.min) return false
         val displayedFraction = (range.current - range.min) / (range.max - range.min)
         abs(displayedFraction - state.fraction) <= 0.02f
