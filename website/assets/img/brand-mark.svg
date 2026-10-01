@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Virtual Volume brand mark: a screen-edge volume line with three ascending level bars.
+  Same geometry as the Android adaptive icon and the website header/footer.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="96" height="96" fill="none">
+  <defs>
+    <linearGradient id="vv-pill-lg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FF0E2"/>
+      <stop offset="1" stop-color="#1FAE9B"/>
+    </linearGradient>
+  </defs>
+  <rect x="14.6" y="3.2" width="3" height="17.6" rx="1.5" fill="url(#vv-pill-lg)"/>
+  <rect x="4.4" y="7" width="8" height="2.4" rx="1.2" fill="#E9EFF8" opacity="0.95"/>
+  <rect x="6.9" y="11.2" width="5.5" height="2.4" rx="1.2" fill="#E9EFF8" opacity="0.7"/>
+  <rect x="9.4" y="15.4" width="3" height="2.4" rx="1.2" fill="#E9EFF8" opacity="0.45"/>
+</svg>

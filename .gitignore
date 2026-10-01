@@ -1,0 +1,38 @@
+# --- Android / Gradle ---
+android/.gradle/
+android/build/
+android/app/build/
+android/app/release/
+android/captures/
+android/.kotlin/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Local signing material — never commit these
+android/keystore.properties
+android/app/*.jks
+android/app/*.keystore
+*.jks
+*.keystore
+
+# Local configuration
+local.properties
+
+# --- IDE ---
+.idea/
+*.iml
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# --- Website ---
+website/node_modules/
+website/dist/
+
+# --- Logs / temp ---
+*.log
+*.tmp

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Virtual Volume</string>
+    <string name="app_tagline">Your volume button, rebuilt for your screen.</string>
+    <string name="foreground_service_reason">Keeps the user-enabled floating volume control available on screen</string>
+    <string name="tile_label">Virtual Volume</string>
+    <string name="tile_subtitle_on">Control is on screen</string>
+    <string name="tile_subtitle_off">Control is hidden</string>
+    <string name="tile_subtitle_permission">Needs overlay permission</string>
+
+    <!-- Notification -->
+    <string name="notification_channel_name">Volume control</string>
+    <string name="notification_channel_description">Persistent notification that keeps the floating volume control running.</string>
+    <string name="notification_title">Virtual Volume is active</string>
+    <string name="notification_text">Touch the edge of your screen to change the volume.</string>
+    <string name="notification_text_stream">Controlling %1$s volume</string>
+    <string name="notification_action_stop">Turn off</string>
+    <string name="notification_action_open">Open app</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_done">Finish</string>
+    <string name="onboarding_step_of">Step %1$d of %2$d</string>
+
+    <!-- Permissions -->
+    <string name="permission_overlay_needed">Overlay permission is required</string>
+    <string name="permission_overlay_needed_body">Virtual Volume draws a small control on the edge of your screen so you can reach it from any app. Android calls this “Display over other apps”.</string>
+    <string name="permission_notifications_needed">Notifications keep the control alive</string>
+    <string name="permission_notifications_needed_body">Android requires a visible notification for any long-running control. You can keep it silent and unobtrusive.</string>
+
+    <!-- Errors -->
+    <string name="error_overlay_revoked">Overlay permission was removed</string>
+    <string name="error_overlay_revoked_body">Android no longer allows Virtual Volume to draw on screen. Re-enable “Display over other apps” to bring the control back.</string>
+    <string name="error_service_start">The control could not start</string>
+    <string name="error_service_start_body">Android blocked the background start. Open Virtual Volume and turn it on from the dashboard to try again.</string>
+
+</resources>
