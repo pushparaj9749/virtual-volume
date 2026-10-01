@@ -100,8 +100,14 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -memory 2048
           script: |
+            set -euo pipefail
+            export ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+            export ANDROID_SDK_ROOT="$ANDROID_HOME"
+            export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+            command -v adb
+            adb version
             cd android
-            trap 'adb shell dumpsys window windows > "$RUNNER_TEMP/window-state.txt"; adb logcat -d > "$RUNNER_TEMP/device-log.txt"; mkdir -p ../.qa/screenshots; adb pull /sdcard/Android/data/dev.virtualvolume.app.debug/files/qa ../.qa/screenshots || true' EXIT
+            trap 'adb shell dumpsys window windows > "$RUNNER_TEMP/window-state.txt" 2>&1 || true; adb logcat -d > "$RUNNER_TEMP/device-log.txt" 2>&1 || true; mkdir -p ../.qa/screenshots; adb pull /sdcard/Android/data/dev.virtualvolume.app.debug/files/qa ../.qa/screenshots || true' EXIT
             ./gradlew :app:connectedDebugAndroidTest --console=plain --stacktrace
             adb shell dumpsys window windows > "$RUNNER_TEMP/window-state.txt"
             adb logcat -d > "$RUNNER_TEMP/device-log.txt"
