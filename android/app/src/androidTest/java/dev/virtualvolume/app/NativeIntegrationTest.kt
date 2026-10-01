@@ -7,6 +7,7 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.accessibility.AccessibilityNodeInfo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -19,6 +20,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
+import dev.virtualvolume.app.core.audio.VolumeState
 import dev.virtualvolume.app.core.data.VolumeSettings
 import dev.virtualvolume.app.core.data.VolumeStreamType
 import dev.virtualvolume.app.core.platform.OverlayPermission
@@ -34,6 +36,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import kotlin.math.abs
 
 /** Runs against an installed native app and the emulator's real AudioManager/WindowManager. */
 @RunWith(AndroidJUnit4::class)
@@ -42,6 +45,7 @@ class NativeIntegrationTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val app: Context get() = instrumentation.targetContext
     private val device = UiDevice.getInstance(instrumentation)
+    private val nativeVolumeSlider = By.res("com.android.systemui", "volume_row_slider")
     private val container get() = app.appContainer
     private var originalVolume = 0
 
@@ -51,8 +55,49 @@ class NativeIntegrationTest {
         assertTrue(message, predicate())
     }
     private fun index() = container.volumeController.snapshot(VolumeStreamType.MEDIA).index
-    private fun middle() { container.volumeController.setIndex(VolumeStreamType.MEDIA,
-        container.volumeController.snapshot(VolumeStreamType.MEDIA).max / 2) }
+
+    /** Test setup is silent; only a user-driven app change should open the system volume panel. */
+    private fun middle() {
+        val audio = requireNotNull(app.getSystemService(AudioManager::class.java))
+        audio.setStreamVolume(AudioManager.STREAM_MUSIC, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) / 2, 0)
+    }
+
+    private fun findNativeSlider(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        if (node.viewIdResourceName == "com.android.systemui:id/volume_row_slider") return node
+        for (index in 0 until node.childCount) {
+            val child = node.getChild(index) ?: continue
+            val match = findNativeSlider(child)
+            if (match != null) return match
+        }
+        return null
+    }
+
+    private fun nativeVolumeHudMatches(state: VolumeState): Boolean = runCatching {
+        val slider = instrumentation.uiAutomation.windows
+            .asSequence()
+            .mapNotNull { it.root }
+            .mapNotNull(::findNativeSlider)
+            .firstOrNull() ?: return false
+        val range = slider.rangeInfo ?: return false
+        if (range.max <= range.min) return false
+        val displayedFraction = (range.current - range.min) / (range.max - range.min)
+        abs(displayedFraction - state.fraction) <= 0.02f
+    }.getOrDefault(false)
+
+    private fun assertNativeVolumeHudMatchesCurrentLevel() {
+        val expected = container.volumeController.snapshot(VolumeStreamType.MEDIA)
+        waitFor("Android's native volume slider appears at media level ${expected.index}") {
+            nativeVolumeHudMatches(expected)
+        }
+    }
+
+    private fun waitForNativeVolumeHudToDismiss() {
+        assertTrue(
+            "Android's native volume panel dismisses before the next overlay gesture",
+            device.wait(Until.gone(nativeVolumeSlider), 8_000),
+        )
+    }
+
     private fun screenshot(name: String) {
         val folder = File(app.getExternalFilesDir(null), "qa").apply { mkdirs() }
         assertTrue(device.takeScreenshot(File(folder, "$name.png")))
@@ -72,7 +117,8 @@ class NativeIntegrationTest {
 
     @After fun cleanUp() {
         runBlocking { container.overlayServiceController.setEnabled(false) }
-        container.volumeController.setIndex(VolumeStreamType.MEDIA, originalVolume)
+        requireNotNull(app.getSystemService(AudioManager::class.java))
+            .setStreamVolume(AudioManager.STREAM_MUSIC, originalVolume, 0)
         shell("cmd statusbar remove-tile ${app.packageName}/dev.virtualvolume.app.tile.VolumeTileService")
         shell("cmd statusbar collapse")
         shell("appops set ${app.packageName} SYSTEM_ALERT_WINDOW allow")
@@ -99,6 +145,9 @@ class NativeIntegrationTest {
             scenario.recreate()
             waitFor("Real overlay permission granted") { OverlayPermission.isGranted(app) }
             compose.onNodeWithText("Continue").performClick()
+            // Start the service with a non-default step so the tap test proves the
+            // persisted setting is applied, not just the default one-level increment.
+            runBlocking { container.settingsRepository.update { it.copy(volumeStep = 2) } }
             compose.onNodeWithText("Enable Virtual Volume").performClick()
             waitFor("Window actually attached") { OverlayRuntime.isServiceRunning.value && OverlayRuntime.placement.value != null }
             compose.onNodeWithText("Continue").performClick()
@@ -110,14 +159,26 @@ class NativeIntegrationTest {
             val x = p.xOffset + p.windowWidthPx / 2
             val beforeTap = index()
             device.click(x, p.yOffset + p.windowHeightPx / 4)
-            waitFor("Upper split tap raises real media volume by exactly one") { index() == beforeTap + 1 }
+            waitFor("Upper split tap applies the configured two-level media step") { index() == beforeTap + 2 }
+            assertNativeVolumeHudMatchesCurrentLevel()
+            screenshot("volume-hud-after-configured-tap")
+            waitForNativeVolumeHudToDismiss()
+
             device.click(x, p.yOffset + p.windowHeightPx * 3 / 4)
-            waitFor("Lower split tap lowers real media volume by exactly one") { index() == beforeTap }
+            waitFor("Lower split tap applies the configured two-level decrease") { index() == beforeTap }
+            assertNativeVolumeHudMatchesCurrentLevel()
+            waitForNativeVolumeHudToDismiss()
+
             device.swipe(x, p.yOffset + p.windowHeightPx * 3 / 4, x, p.yOffset + p.windowHeightPx / 4, 20)
             waitFor("Swipe up raises real media volume") { index() > beforeTap }
+            assertNativeVolumeHudMatchesCurrentLevel()
+            waitForNativeVolumeHudToDismiss()
+
             val high = index()
             device.swipe(x, p.yOffset + p.windowHeightPx / 4, x, p.yOffset + p.windowHeightPx * 3 / 4, 20)
             waitFor("Continuous downward drag lowers real media volume") { index() < high }
+            assertNativeVolumeHudMatchesCurrentLevel()
+            waitForNativeVolumeHudToDismiss()
 
             compose.onNodeWithText("Continue").performClick()
             compose.onNodeWithText("Add it to Quick Settings").assertIsDisplayed()
@@ -137,6 +198,8 @@ class NativeIntegrationTest {
             device.swipe(l.xOffset + l.windowWidthPx * 3 / 4, l.yOffset + l.windowHeightPx / 2,
                 l.xOffset + l.windowWidthPx / 4, l.yOffset + l.windowHeightPx / 2, 20)
             waitFor("Landscape drag along physical edge raises volume") { index() > beforeLandscape }
+            assertNativeVolumeHudMatchesCurrentLevel()
+            waitForNativeVolumeHudToDismiss()
 
             device.setOrientationRight()
             waitFor("Natural right edge becomes the other landscape bottom") { OverlayRuntime.placement.value?.rotation == DisplayRotation.RIGHT }

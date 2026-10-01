@@ -99,14 +99,8 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -memory 2048
-          script: |
-            cd android
-            trap 'adb shell dumpsys window windows > "$RUNNER_TEMP/window-state.txt"; adb logcat -d > "$RUNNER_TEMP/device-log.txt"; mkdir -p ../.qa/screenshots; adb pull /sdcard/Android/data/dev.virtualvolume.app.debug/files/qa ../.qa/screenshots || true' EXIT
-            ./gradlew :app:connectedDebugAndroidTest --console=plain --stacktrace
-            adb shell dumpsys window windows > "$RUNNER_TEMP/window-state.txt"
-            adb logcat -d > "$RUNNER_TEMP/device-log.txt"
-            mkdir -p ../.qa/screenshots
-            adb pull /sdcard/Android/data/dev.virtualvolume.app.debug/files/qa ../.qa/screenshots || true
+          working-directory: ${{ github.workspace }}
+          script: bash tools/run_android_device_test.sh
       - name: Upload device test evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -119,6 +113,7 @@ jobs:
             .qa/screenshots/
             ${{ runner.temp }}/window-state.txt
             ${{ runner.temp }}/device-log.txt
+            .qa/device-checks.log
           retention-days: 14
       - name: Report device test failures
         if: failure()
@@ -128,6 +123,15 @@ jobs:
           HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           python3 tools/ci_diagnostics.py > "$RUNNER_TEMP/device-diagnostics.md"
+          if [ -f ".qa/device-checks.log" ]; then
+            {
+              echo
+              echo "### Emulator runner output"
+              echo '```text'
+              tail -n 160 ".qa/device-checks.log"
+              echo '```'
+            } >> "$RUNNER_TEMP/device-diagnostics.md"
+          fi
           cat "$RUNNER_TEMP/device-diagnostics.md"
           if [ -z "${PR_NUMBER:-}" ]; then PR_NUMBER=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$HEAD_BRANCH" --json number --jq '.[0].number // empty'); fi
           if [ -n "${PR_NUMBER:-}" ]; then

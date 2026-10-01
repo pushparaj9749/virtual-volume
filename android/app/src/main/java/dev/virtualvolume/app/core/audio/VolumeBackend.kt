@@ -20,6 +20,13 @@ class AudioManagerBackend(private val audioManager: AudioManager?) : VolumeBacke
     override fun currentVolume(stream: VolumeStreamType): Int = requireNotNull(audioManager).getStreamVolume(stream.streamConstant)
     override fun isFixedVolume(): Boolean = audioManager?.isVolumeFixed ?: true
     override fun setVolume(stream: VolumeStreamType, index: Int) {
-        requireNotNull(audioManager).setStreamVolume(stream.streamConstant, index, 0)
+        // This is the same public AudioManager path used by system volume controls. The
+        // flag asks AudioService to show its native volume panel; it does not draw an
+        // app-owned substitute, and every drag step keeps that panel in sync.
+        requireNotNull(audioManager).setStreamVolume(
+            stream.streamConstant,
+            index,
+            AudioManager.FLAG_SHOW_UI,
+        )
     }
 }
