@@ -101,7 +101,9 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -memory 2048
           script: |
             set -e
-            WORKSPACE="${GITHUB_WORKSPACE:-$(pwd)}"
+            WORKSPACE="${GITHUB_WORKSPACE:-$(git rev-parse --show-toplevel)}"
+            cd "$WORKSPACE"
+            printf 'Workspace: %s\n' "$WORKSPACE"
             mkdir -p "$WORKSPACE/.qa"
             DEVICE_LOG="$WORKSPACE/.qa/device-checks.log"
             TMP_DIR="${RUNNER_TEMP:-/tmp}"
@@ -121,7 +123,7 @@ jobs:
             export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
             run_logged command -v adb
             run_logged adb version
-            cd android
+            cd "$WORKSPACE/android"
             trap 'adb shell dumpsys window windows > "$TMP_DIR/window-state.txt" 2>&1 || true; adb logcat -d > "$TMP_DIR/device-log.txt" 2>&1 || true; mkdir -p ../.qa/screenshots; adb pull /sdcard/Android/data/dev.virtualvolume.app.debug/files/qa ../.qa/screenshots || true' EXIT
             if ./gradlew :app:connectedDebugAndroidTest --console=plain --stacktrace >> "$DEVICE_LOG" 2>&1; then
               cat "$DEVICE_LOG"
