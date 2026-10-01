@@ -2,14 +2,20 @@
 <resources>
     <!--
       The window theme only exists to paint the launch window before Compose takes over.
-      Virtual Volume is dark-first; the in-app light theme is applied by Compose.
+      Virtual Volume is dark-first and the in-app light theme is applied by Compose, so
+      the window stays dark in both system appearances — there is deliberately no
+      values-night variant here.
+
+      `android:windowLightNavigationBar` needs API 27 and therefore lives in values-v27,
+      which adds it on top of the base below.
     -->
-    <style name="Theme.VirtualVolume" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.VirtualVolume.Base" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/window_background</item>
         <item name="android:colorBackground">@color/window_background</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
     </style>
+
+    <style name="Theme.VirtualVolume" parent="Theme.VirtualVolume.Base" />
 </resources>

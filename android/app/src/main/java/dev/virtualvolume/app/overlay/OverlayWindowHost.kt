@@ -2,6 +2,7 @@ package dev.virtualvolume.app.overlay
 
 import android.content.Context
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.os.Build
 import android.util.DisplayMetrics
 import android.util.Log
@@ -9,6 +10,7 @@ import android.view.Display
 import android.view.Gravity
 import android.view.WindowManager
 import android.view.WindowInsets
+import androidx.annotation.RequiresApi
 import dev.virtualvolume.app.core.data.ScreenEdge
 
 /**
@@ -105,7 +107,7 @@ class OverlayWindowHost(context: Context) {
         // best available approximation of the system bar size for this rotation.
         val barHeight = (real.heightPixels - app.heightPixels).coerceIn(0, real.heightPixels)
         val cutout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            runCatching { display.cutout }.getOrNull()
+            cutoutInsets(display)
         } else {
             null
         }
@@ -113,10 +115,30 @@ class OverlayWindowHost(context: Context) {
         return ScreenBounds(
             widthPx = real.widthPixels,
             heightPx = real.heightPixels,
-            insetLeftPx = cutout?.safeInsetLeft ?: 0,
-            insetRightPx = cutout?.safeInsetRight ?: 0,
-            insetTopPx = maxOf(barHeight, cutout?.safeInsetTop ?: 0),
-            insetBottomPx = cutout?.safeInsetBottom ?: 0,
+            insetLeftPx = cutout?.left ?: 0,
+            insetRightPx = cutout?.right ?: 0,
+            insetTopPx = maxOf(barHeight, cutout?.top ?: 0),
+            insetBottomPx = cutout?.bottom ?: 0,
+        )
+    }
+
+    /**
+     * Display-cutout insets as left/top/right/bottom, or null when there is no cutout.
+     *
+     * Split out behind [RequiresApi] rather than read inline: `Display.getDisplayCutout()`
+     * only exists from API 29, and lint only accepts the call when the version guard is
+     * visible in the method that makes it — reading the safe insets back at the call site
+     * looked unguarded even though the object itself was not.
+     */
+    @Suppress("DEPRECATION")
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun cutoutInsets(display: Display): Rect? {
+        val cutout = runCatching { display.cutout }.getOrNull() ?: return null
+        return Rect(
+            cutout.safeInsetLeft,
+            cutout.safeInsetTop,
+            cutout.safeInsetRight,
+            cutout.safeInsetBottom,
         )
     }
 
