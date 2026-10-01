@@ -57,7 +57,7 @@ class NativeIntegrationTest {
 
     /** Test setup is silent; only a user-driven app change should open the system volume panel. */
     private fun middle() {
-        val audio = app.getSystemService(AudioManager::class.java)
+        val audio = requireNotNull(app.getSystemService(AudioManager::class.java))
         audio.setStreamVolume(AudioManager.STREAM_MUSIC, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) / 2, 0)
     }
 
@@ -102,7 +102,7 @@ class NativeIntegrationTest {
 
     @After fun cleanUp() {
         runBlocking { container.overlayServiceController.setEnabled(false) }
-        app.getSystemService(AudioManager::class.java)
+        requireNotNull(app.getSystemService(AudioManager::class.java))
             .setStreamVolume(AudioManager.STREAM_MUSIC, originalVolume, 0)
         shell("cmd statusbar remove-tile ${app.packageName}/dev.virtualvolume.app.tile.VolumeTileService")
         shell("cmd statusbar collapse")
