@@ -111,6 +111,10 @@ jobs:
 
       # Publish the compiler / test diagnostics as a PR comment so they can be read
       # without downloading the raw run logs.
+      #
+      # The assertion messages live in the JUnit XML, not in Gradle's console output, so
+      # they are extracted from there: a bare "AssertionError at File.kt:103" tells you
+      # where a test died but not what it expected.
       - name: Publish failure diagnostics
         if: failure()
         env:
@@ -119,6 +123,38 @@ jobs:
           gradle :app:testDebugUnitTest :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --continue --console=plain > /tmp/gradle-fail.log 2>&1 || true
           {
             echo '### Android CI — diagnostics'
+            echo
+            echo '#### Failing tests'
+            echo
+            XML_DIR="app/build/test-results/testDebugUnitTest"
+            if compgen -G "$XML_DIR/*.xml" > /dev/null; then
+              echo '```text'
+              python3 - "$XML_DIR" <<'PY'
+          import glob, os, sys, xml.etree.ElementTree as ET
+          total = failed = 0
+          for path in sorted(glob.glob(os.path.join(sys.argv[1], "*.xml"))):
+              root = ET.parse(path).getroot()
+              for case in root.iter("testcase"):
+                  total += 1
+                  for kind in ("failure", "error"):
+                      for node in case.findall(kind):
+                          failed += 1
+                          print(f"{case.get('classname')} > {case.get('name')}")
+                          text = (node.get("message") or "").strip()
+                          body = (node.text or "").strip()
+                          print("  message : " + (text or "(none)"))
+                          for line in body.splitlines():
+                              if "dev.virtualvolume" in line or "AssertionError" in line:
+                                  print("  at      : " + line.strip())
+                          print()
+          print(f"{failed} failed / {total} tests")
+          PY
+              echo '```'
+            else
+              echo '_No JUnit XML was produced — the build failed before tests ran._'
+            fi
+            echo
+            echo '#### Compiler / build output'
             echo
             echo '```text'
             grep -E 'e: |error:|FAILED|warning: ' /tmp/gradle-fail.log | head -60 || true

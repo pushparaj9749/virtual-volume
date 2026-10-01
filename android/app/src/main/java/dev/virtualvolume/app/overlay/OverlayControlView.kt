@@ -53,12 +53,24 @@ class OverlayControlView(context: Context) : View(context) {
     private val engine = GestureEngine(
         configProvider = { gestureConfig },
         listener = object : GestureListener {
-            override fun onGestureStart() = setActive(true)
+            // The visual state is updated first, then the event is forwarded, so a
+            // listener that reads back into this view always sees a consistent state.
+            // Forwarding is what lets the service re-read the real system volume the
+            // instant the finger lands, so the first drag step is never computed from a
+            // level that went stale while the control was idle.
+            override fun onGestureStart() {
+                setActive(true)
+                listener?.onGestureStart()
+            }
+
             override fun onStep(deltaSteps: Int, fromTap: Boolean) {
                 listener?.onStep(deltaSteps, fromTap)
             }
 
-            override fun onGestureEnd() = setActive(false)
+            override fun onGestureEnd() {
+                setActive(false)
+                listener?.onGestureEnd()
+            }
         },
     )
 

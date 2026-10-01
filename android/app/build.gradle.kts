@@ -1,4 +1,6 @@
 import java.util.Properties
+import org.gradle.api.tasks.testing.Test
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
     alias(libs.plugins.android.application)
@@ -150,6 +152,19 @@ dependencies {
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
+}
+
+// Print full assertion details for failing unit tests. Gradle's default console output
+// only shows "java.lang.AssertionError at File.kt:103", which says where a test died but
+// not what it expected — that detail is what makes a CI failure actionable.
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events("failed", "skipped")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+    }
 }
 
 tasks.register("printReleaseSigningStatus") {
