@@ -26,7 +26,7 @@ class AudioVolumeMonitor(context: Context) {
     private val app = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
 
-    fun observe(stream: VolumeStreamType, read: (VolumeStreamType) -> Int): Flow<Int> = callbackFlow {
+    fun observe(stream: VolumeStreamType, read: (VolumeStreamType) -> VolumeState): Flow<VolumeState> = callbackFlow {
         fun sample() { trySend(read(stream)) }
         val observer = object : ContentObserver(handler) {
             override fun onChange(selfChange: Boolean) = sample()

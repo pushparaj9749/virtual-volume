@@ -3,27 +3,27 @@ package dev.virtualvolume.app.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // Brand
-val BrandMint = Color(0xFF35D0BA)
-val BrandMintBright = Color(0xFF8FF0E2)
-val BrandMintDeep = Color(0xFF12A08F)
-val BrandInk = Color(0xFF070A0F)
+val BrandMint = Color(0xFFB9E6C9)
+val BrandMintBright = Color(0xFFD5F2DE)
+val BrandMintDeep = Color(0xFF245A3B)
+val BrandInk = Color(0xFF101514)
 
 // Dark-first surfaces
-val DarkSurface = Color(0xFF0F141D)
-val DarkSurfaceHigh = Color(0xFF161D29)
-val DarkSurfaceVariant = Color(0xFF1C2432)
-val DarkOutline = Color(0xFF2C3646)
-val DarkOnSurface = Color(0xFFE9EFF8)
-val DarkOnSurfaceVariant = Color(0xFF9FB0C6)
+val DarkSurface = Color(0xFF171D1B)
+val DarkSurfaceHigh = Color(0xFF202922)
+val DarkSurfaceVariant = Color(0xFF1E2622)
+val DarkOutline = Color(0xFF4C5A50)
+val DarkOnSurface = Color(0xFFF0F2E9)
+val DarkOnSurfaceVariant = Color(0xFFA2ABA5)
 
 // Light surfaces
-val LightBackground = Color(0xFFF5F7FB)
+val LightBackground = Color(0xFFF8F9F3)
 val LightSurface = Color(0xFFFFFFFF)
-val LightSurfaceVariant = Color(0xFFE9EDF5)
-val LightOutline = Color(0xFFC9D2E0)
-val LightOnSurface = Color(0xFF0D1219)
-val LightOnSurfaceVariant = Color(0xFF4C5A6E)
+val LightSurfaceVariant = Color(0xFFE9EEE5)
+val LightOutline = Color(0xFFC1D1C4)
+val LightOnSurface = Color(0xFF17261D)
+val LightOnSurfaceVariant = Color(0xFF56655C)
 
-val ErrorRed = Color(0xFFE5484D)
-val ErrorRedContainer = Color(0x33E5484D)
+val ErrorRed = Color(0xFFEF7377)
+val ErrorRedContainer = Color(0x33EF7377)
 val WarningAmber = Color(0xFFE8A33D)

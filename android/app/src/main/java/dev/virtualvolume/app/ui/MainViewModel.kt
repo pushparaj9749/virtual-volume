@@ -79,8 +79,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .distinctUntilChanged()
         .flatMapLatest { stream ->
             merge(
-                container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it).index }
-                    .map { container.volumeController.snapshot(stream) },
+                container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it) },
                 container.volumeController.changes.filter { it.stream == stream },
             )
         }

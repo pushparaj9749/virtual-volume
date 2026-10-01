@@ -41,9 +41,8 @@ class AppContainer(context: Context) {
 
     val settingsRepository: SettingsRepository by lazy { SettingsRepository(dataStore) }
 
-    private val audioManager: AudioManager by lazy {
+    private val audioManager: AudioManager? by lazy {
         appContext.getSystemService(AudioManager::class.java)
-            ?: error("AudioManager is unavailable on this device")
     }
 
     val volumeController: VolumeController by lazy {

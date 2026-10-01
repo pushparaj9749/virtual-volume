@@ -13,13 +13,13 @@ interface VolumeBackend {
 }
 
 /** Only this adapter knows AudioManager. No hidden APIs or simulated values. */
-class AudioManagerBackend(private val audioManager: AudioManager) : VolumeBackend {
+class AudioManagerBackend(private val audioManager: AudioManager?) : VolumeBackend {
     override fun minVolume(stream: VolumeStreamType): Int =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) audioManager.getStreamMinVolume(stream.streamConstant) else 0
-    override fun maxVolume(stream: VolumeStreamType): Int = audioManager.getStreamMaxVolume(stream.streamConstant)
-    override fun currentVolume(stream: VolumeStreamType): Int = audioManager.getStreamVolume(stream.streamConstant)
-    override fun isFixedVolume(): Boolean = audioManager.isVolumeFixed
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) requireNotNull(audioManager).getStreamMinVolume(stream.streamConstant) else 0
+    override fun maxVolume(stream: VolumeStreamType): Int = requireNotNull(audioManager).getStreamMaxVolume(stream.streamConstant)
+    override fun currentVolume(stream: VolumeStreamType): Int = requireNotNull(audioManager).getStreamVolume(stream.streamConstant)
+    override fun isFixedVolume(): Boolean = audioManager?.isVolumeFixed ?: true
     override fun setVolume(stream: VolumeStreamType, index: Int) {
-        audioManager.setStreamVolume(stream.streamConstant, index, 0)
+        requireNotNull(audioManager).setStreamVolume(stream.streamConstant, index, 0)
     }
 }

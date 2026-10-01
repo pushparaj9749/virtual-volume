@@ -132,8 +132,8 @@ class OverlayService : LifecycleService() {
 
     private fun observeAudio() = scope.launch {
         container.settingsRepository.settings.map { it.audioStream }.distinctUntilChanged().flatMapLatest { stream ->
-            merge(container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it).index },
-                container.volumeController.changes.filter { it.stream == stream }.map { it.index })
+            merge(container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it) },
+                container.volumeController.changes.filter { it.stream == stream })
         }.collect { refreshVolume() }
     }
 

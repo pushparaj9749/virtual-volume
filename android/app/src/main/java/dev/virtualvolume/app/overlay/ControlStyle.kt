@@ -27,7 +27,7 @@ data class ControlStyle(
         const val MIN_ALPHA = 0.08f
 
         const val DEFAULT_TRACK_COLOR = 0x33FFFFFF.toInt()
-        const val DEFAULT_FILL_COLOR = 0xFF35D0BA.toInt()
-        const val DEFAULT_GLOW_COLOR = 0xFF35D0BA.toInt()
+        const val DEFAULT_FILL_COLOR = 0xFFB9E6C9.toInt()
+        const val DEFAULT_GLOW_COLOR = 0xFFB9E6C9.toInt()
     }
 }

@@ -159,8 +159,8 @@ fun AboutScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             SectionHeader("Android limitations")
             GlassCard {
                 Bullet(
-                    "The screen must be on. Android does not deliver touch events to overlays while the " +
-                        "display is off, and no app can change that.",
+                    "The screen must be on and unlocked. Standard overlays cannot receive arbitrary " +
+                        "touch gestures with the display powered off. Virtual Volume has no screen-off gestures.",
                 )
                 Bullet(
                     "Some system surfaces — the lock screen, secure payment sheets and full-screen system " +
@@ -171,8 +171,8 @@ fun AboutScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                         "app or tapping the Quick Settings tile brings the control back.",
                 )
                 Bullet(
-                    "A few OEM skins add their own battery rules. Excluding Virtual Volume from battery " +
-                        "optimisation keeps the control alive longer.",
+                    "Some manufacturers impose extra battery rules. If the service pauses, check your " +
+                        "phone's background settings, then resume from the app. The app never bypasses these rules.",
                 )
             }
         }
@@ -248,5 +248,5 @@ private fun Bullet(text: String) {
 private fun android.content.Context.openUrl(url: String) {
     runCatching {
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }
+    }.onFailure { android.widget.Toast.makeText(this, "Install or enable a browser to open this link.", android.widget.Toast.LENGTH_LONG).show() }
 }

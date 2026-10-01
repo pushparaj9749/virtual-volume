@@ -59,11 +59,11 @@ fun GlassCard(
     val brush = remember(brand.isDark) {
         if (brand.isDark) {
             Brush.linearGradient(
-                listOf(Color(0xF2141B26.toInt()), Color(0xB31A2231.toInt())),
+                listOf(Color(0xF219231C.toInt()), Color(0xB31E2B22.toInt())),
             )
         } else {
             Brush.linearGradient(
-                listOf(Color(0xFFFFFFFF.toInt()), Color(0xFFF1F4FA.toInt())),
+                listOf(Color(0xFFFFFFFF.toInt()), Color(0xFFF1F5ED.toInt())),
             )
         }
     }
