@@ -113,6 +113,10 @@ android {
         warningsAsErrors = false
         checkReleaseBuilds = false
         sarifReport = true
+        // A plain-text report is what CI can grep and paste into a failure comment;
+        // SARIF alone is not readable without a viewer.
+        textReport = true
+        htmlReport = true
     }
 
     testOptions {

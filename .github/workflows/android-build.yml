@@ -120,7 +120,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gradle :app:testDebugUnitTest :app:compileDebugKotlin :app:compileDebugUnitTestKotlin --continue --console=plain > /tmp/gradle-fail.log 2>&1 || true
+          gradle :app:testDebugUnitTest :app:compileDebugKotlin :app:compileDebugUnitTestKotlin :app:lintDebug --continue --console=plain > /tmp/gradle-fail.log 2>&1 || true
           {
             echo '### Android CI — diagnostics'
             echo
@@ -152,6 +152,17 @@ jobs:
               echo '```'
             else
               echo '_No JUnit XML was produced — the build failed before tests ran._'
+            fi
+            echo
+            echo '#### Android lint'
+            echo
+            LINT_TXT="app/build/reports/lint-results-debug.txt"
+            if [ -f "$LINT_TXT" ]; then
+              echo '```text'
+              grep -E 'Error:|Warning:|errors?, ' "$LINT_TXT" | head -80 || true
+              echo '```'
+            else
+              echo '_No lint text report was produced._'
             fi
             echo
             echo '#### Compiler / build output'
