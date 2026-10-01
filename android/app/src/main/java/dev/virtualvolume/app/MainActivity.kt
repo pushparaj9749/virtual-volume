@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
     private fun openTilePreferences() {
         runCatching {
             startActivity(
-                Intent(Settings.ACTION_QS_TILE_PREFERENCES)
+                Intent("android.settings.QS_TILE_PREFERENCES")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }

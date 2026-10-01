@@ -57,14 +57,22 @@ internal object VibrationEffects {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
         } else {
-            VibrationEffect.createOneOff(0L, TICK_LENGTH_MS, VibrationEffect.DEFAULT_AMPLITUDE)
+            VibrationEffect.createWaveform(
+                longArrayOf(TICK_LENGTH_MS),
+                intArrayOf(VibrationEffect.DEFAULT_AMPLITUDE),
+                -1,
+            )
         }
 
     fun confirm(): VibrationEffect =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
         } else {
-            VibrationEffect.createOneOff(0L, CONFIRM_LENGTH_MS, VibrationEffect.DEFAULT_AMPLITUDE)
+            VibrationEffect.createWaveform(
+                longArrayOf(CONFIRM_LENGTH_MS),
+                intArrayOf(VibrationEffect.DEFAULT_AMPLITUDE),
+                -1,
+            )
         }
 
     private const val TICK_LENGTH_MS = 12L
