@@ -20,7 +20,7 @@ object OverlayPermission {
         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 }
 
-/** Notification permission helpers (Android 13+ gates the foreground-service notice). */
+/** Notification permission helpers. Denial does not prevent running a foreground service. */
 object NotificationPermission {
 
     fun isGranted(context: Context): Boolean =

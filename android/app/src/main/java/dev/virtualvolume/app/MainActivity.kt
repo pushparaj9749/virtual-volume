@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -44,6 +45,7 @@ import dev.virtualvolume.app.ui.about.AboutScreen
 import dev.virtualvolume.app.ui.dashboard.DashboardScreen
 import dev.virtualvolume.app.ui.onboarding.OnboardingScreen
 import dev.virtualvolume.app.ui.theme.VirtualVolumeTheme
+import dev.virtualvolume.app.ui.components.QuickSettingsHelpDialog
 
 /**
  * The only activity in the app. Compose handles every screen; the activity owns the pieces
@@ -64,6 +66,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by viewModel.uiState.collectAsStateWithLifecycle()
             val snackbarHostState = remember { SnackbarHostState() }
+            var showTileHelp by rememberSaveable { mutableStateOf(intent.action == "android.service.quicksettings.action.QS_TILE_PREFERENCES") }
 
             VirtualVolumeTheme(themeMode = state.settings.themeMode) {
                 Box(
@@ -72,6 +75,7 @@ class MainActivity : ComponentActivity() {
                         .background(MaterialTheme.colorScheme.background),
                 ) {
                     AppRoot(state = state, viewModel = viewModel)
+                    if (showTileHelp) QuickSettingsHelpDialog { showTileHelp = false }
 
                     SnackbarHost(
                         hostState = snackbarHostState,
@@ -90,7 +94,7 @@ class MainActivity : ComponentActivity() {
                     when (event) {
                         UiEvent.RequestOverlayPermission -> openOverlaySettings()
                         UiEvent.RequestNotificationPermission -> requestNotificationPermission()
-                        UiEvent.OpenTilePreferences -> openTilePreferences()
+                        UiEvent.OpenTilePreferences -> showTileHelp = true
                         is UiEvent.Error -> snackbarHostState.showSnackbar(event.message)
                     }
                 }
@@ -110,15 +114,6 @@ class MainActivity : ComponentActivity() {
                     Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     Uri.parse("package:$packageName"),
                 ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-        }
-    }
-
-    private fun openTilePreferences() {
-        runCatching {
-            startActivity(
-                Intent("android.settings.QS_TILE_PREFERENCES")
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         }
     }
@@ -156,6 +151,8 @@ private fun AppRoot(state: UiState, viewModel: MainViewModel) {
         return
     }
 
+    BackHandler(enabled = current == Destination.ABOUT) { destination = Destination.DASHBOARD }
+
     AnimatedContent(
         targetState = current,
         transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(160)) },
@@ -169,7 +166,7 @@ private fun AppRoot(state: UiState, viewModel: MainViewModel) {
                 onEnable = { viewModel.setEnabled(true) },
                 onPreviewStep = viewModel::applyPreviewStep,
                 onFinish = {
-                    viewModel.completeOnboarding()
+                    if (target == Destination.ONBOARDING) viewModel.completeOnboarding()
                     destination = Destination.DASHBOARD
                 },
             )

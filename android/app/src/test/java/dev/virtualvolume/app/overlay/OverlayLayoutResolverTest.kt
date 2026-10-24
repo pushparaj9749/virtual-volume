@@ -1,170 +1,83 @@
 package dev.virtualvolume.app.overlay
 
 import dev.virtualvolume.app.core.data.ScreenEdge
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 
-/**
- * Orientation handling is the part that silently breaks in overlay apps, so the resolver
- * is pinned against explicit portrait and both landscape geometries.
- *
- * Nothing here is a stored coordinate: the same [ControlPlacement] is resolved against
- * whatever the display reports *now*.
- */
 class OverlayLayoutResolverTest {
+    private val placement = ControlPlacement(ScreenEdge.RIGHT, 0.25f, 396f, 15f, 96f, 492f)
+    private val portrait = ScreenBounds(1080, 2400, insetTopPx = 100, insetBottomPx = 120)
+    private val landscapeLeft = ScreenBounds(2400, 1080, insetLeftPx = 100, insetRightPx = 120, rotation = DisplayRotation.LEFT)
+    private val landscapeRight = ScreenBounds(2400, 1080, insetLeftPx = 120, insetRightPx = 100, rotation = DisplayRotation.RIGHT)
 
-    private val portrait = ScreenBounds(
-        widthPx = 1080,
-        heightPx = 2400,
-        insetLeftPx = 0,
-        insetRightPx = 0,
-        insetTopPx = 100,
-        insetBottomPx = 120,
-    )
-
-    // Rotated 90°: the cutout is now on the left.
-    private val landscapeCutoutLeft = ScreenBounds(
-        widthPx = 2400,
-        heightPx = 1080,
-        insetLeftPx = 100,
-        insetRightPx = 0,
-        insetTopPx = 0,
-        insetBottomPx = 0,
-    )
-
-    // Rotated 270°: the cutout is now on the right.
-    private val landscapeCutoutRight = ScreenBounds(
-        widthPx = 2400,
-        heightPx = 1080,
-        insetLeftPx = 0,
-        insetRightPx = 100,
-        insetTopPx = 0,
-        insetBottomPx = 0,
-    )
-
-    private val placement = ControlPlacement(
-        edge = ScreenEdge.RIGHT,
-        offsetFraction = 0.5f,
-        lengthPx = 396f,
-        thicknessPx = 15f,
-        touchWidthPx = 120f,
-        touchLengthPx = 600f,
-    )
-
-    @Test
-    fun `portrait position sits inside the usable area`() {
-        val result = OverlayLayoutResolver.resolve(portrait, placement, density = 3f)
-
-        // margin 24, top edge 124, bottom edge 2256, usable 2132, travel 1532
-        assertEquals(ScreenEdge.RIGHT, result.edge)
-        assertEquals(0, result.xOffset)
-        assertEquals(890, result.yOffset)
-        assertEquals(120, result.windowWidthPx)
-        assertEquals(600, result.windowHeightPx)
-        assertTrue(result.isValid)
-        assertTrue(result.yOffset + result.windowHeightPx <= portrait.heightPx - portrait.insetBottomPx)
+    @Test fun `physical right rotates to top left and bottom rather than following screen right`() {
+        assertEquals(DisplayEdge.RIGHT, OverlayLayoutResolver.resolve(portrait, placement, 3f).edge)
+        assertEquals(DisplayEdge.TOP, OverlayLayoutResolver.resolve(landscapeLeft, placement, 3f).edge)
+        assertEquals(DisplayEdge.LEFT, OverlayLayoutResolver.resolve(portrait.copy(rotation = DisplayRotation.INVERTED), placement, 3f).edge)
+        assertEquals(DisplayEdge.BOTTOM, OverlayLayoutResolver.resolve(landscapeRight, placement, 3f).edge)
     }
 
-    @Test
-    fun `offset zero hugs the top and offset one hugs the bottom of the usable area`() {
-        val top = OverlayLayoutResolver.resolve(portrait, placement.copy(offsetFraction = 0f), 3f)
-        val bottom = OverlayLayoutResolver.resolve(portrait, placement.copy(offsetFraction = 1f), 3f)
-
-        assertEquals(124, top.yOffset)
-        assertEquals(1656, bottom.yOffset)
-        assertEquals(2256, bottom.yOffset + bottom.windowHeightPx)
+    @Test fun `relative physical offset survives both landscape rotations including reversed travel`() {
+        val p = OverlayLayoutResolver.resolve(portrait, placement, 3f)
+        val l = OverlayLayoutResolver.resolve(landscapeLeft, placement, 3f)
+        val r = OverlayLayoutResolver.resolve(landscapeRight, placement, 3f)
+        val travel = (2400 - 100 - 120 - 48 - 492).toFloat()
+        assertEquals(0.25f, (p.yOffset - 124) / travel, 0.001f)
+        assertEquals(0.25f, (l.xOffset - 124) / travel, 0.001f)
+        assertEquals(0.25f, 1f - (r.xOffset - 144) / travel, 0.001f)
+        assertEquals(0, l.yOffset)
+        assertEquals(1080 - 96, r.yOffset)
     }
 
-    @Test
-    fun `the position is recomputed for landscape instead of reusing portrait coordinates`() {
-        val portraitResult = OverlayLayoutResolver.resolve(portrait, placement, 3f)
-        val landscapeResult = OverlayLayoutResolver.resolve(landscapeCutoutLeft, placement, 3f)
-
-        // margin 24, usable 1032, travel 432 -> y = 24 + 216
-        assertEquals(240, landscapeResult.yOffset)
-        assertTrue(landscapeResult.yOffset != portraitResult.yOffset)
-        assertTrue(landscapeResult.yOffset + landscapeResult.windowHeightPx <= landscapeCutoutLeft.heightPx)
+    @Test fun `the touch zone swaps dimensions along with the device`() {
+        val p = OverlayLayoutResolver.resolve(portrait, placement, 3f)
+        val l = OverlayLayoutResolver.resolve(landscapeLeft, placement, 3f)
+        assertEquals(96, p.windowWidthPx)
+        assertEquals(492, p.windowHeightPx)
+        assertEquals(p.windowWidthPx, l.windowHeightPx)
+        assertEquals(p.windowHeightPx, l.windowWidthPx)
     }
 
-    @Test
-    fun `both landscape rotations keep the control on the right and clear of the cutout`() {
-        val cutoutLeft = OverlayLayoutResolver.resolve(landscapeCutoutLeft, placement, 3f)
-        val cutoutRight = OverlayLayoutResolver.resolve(landscapeCutoutRight, placement, 3f)
-
-        assertEquals(ScreenEdge.RIGHT, cutoutLeft.edge)
-        assertEquals(ScreenEdge.RIGHT, cutoutRight.edge)
-        assertEquals(0, cutoutLeft.xOffset)
-        assertEquals(100, cutoutRight.xOffset)
-        assertEquals(cutoutLeft.yOffset, cutoutRight.yOffset)
-    }
-
-    @Test
-    fun `the left edge mirrors the right edge`() {
-        val right = OverlayLayoutResolver.resolve(portrait, placement, 3f)
-        val left = OverlayLayoutResolver.resolve(
-            portrait.copy(insetLeftPx = 60, insetRightPx = 0),
-            placement.copy(edge = ScreenEdge.LEFT),
-            3f,
-        )
-
-        assertEquals(ScreenEdge.LEFT, left.edge)
-        assertEquals(60, left.xOffset)
-        assertEquals(right.yOffset, left.yOffset)
-    }
-
-    @Test
-    fun `the relative offset survives a rotation`() {
-        val fraction = 0.25f
-        val expected = listOf(portrait, landscapeCutoutLeft, landscapeCutoutRight).map { bounds ->
-            val result = OverlayLayoutResolver.resolve(
-                bounds,
-                placement.copy(offsetFraction = fraction),
-                3f,
-            )
-            val margin = 24
-            val topEdge = bounds.insetTopPx + margin
-            val usable = bounds.heightPx - bounds.insetBottomPx - margin - topEdge
-            val travel = usable - result.windowHeightPx
-            (result.yOffset - topEdge).toFloat() / travel.toFloat()
-        }
-
-        expected.forEach { resolved ->
-            assertEquals(fraction, resolved, 0.002f)
+    @Test fun `left physical edge is opposite for every rotation and ignores locale`() {
+        DisplayRotation.entries.forEach { rotation ->
+            val right = OverlayLayoutResolver.edgeFor(ScreenEdge.RIGHT, rotation)
+            val left = OverlayLayoutResolver.edgeFor(ScreenEdge.LEFT, rotation)
+            assertEquals((right.ordinal + 2) % 4, left.ordinal)
         }
     }
 
-    @Test
-    fun `the touch zone shrinks on a small screen instead of overflowing`() {
-        val small = ScreenBounds(widthPx = 400, heightPx = 400)
-        val result = OverlayLayoutResolver.resolve(
-            small,
-            placement.copy(offsetFraction = 1f),
-            density = 2f,
-        )
-
-        // usable 368, max touch length 265 -> travel 103
-        assertEquals(265, result.windowHeightPx)
-        assertEquals(119, result.yOffset)
-        assertEquals(384, result.yOffset + result.windowHeightPx)
-        assertTrue(result.isValid)
+    @Test fun `every combination stays inside system bars and cutouts`() {
+        listOf(ScreenEdge.LEFT, ScreenEdge.RIGHT).forEach { edge ->
+            DisplayRotation.entries.forEach { rotation ->
+                listOf(0f, 0.32f, 1f, -9f, 99f, Float.NaN).forEach { offset ->
+                    val bounds = ScreenBounds(1440, 900, 85, 40, 30, 90, rotation)
+                    val r = OverlayLayoutResolver.resolve(bounds, placement.copy(edge = edge, offsetFraction = offset), 2f)
+                    assertTrue(r.isValid)
+                    assertTrue(r.xOffset >= 85)
+                    assertTrue(r.yOffset >= 30)
+                    assertTrue(r.xOffset + r.windowWidthPx <= 1400)
+                    assertTrue(r.yOffset + r.windowHeightPx <= 810)
+                }
+            }
+        }
     }
 
-    @Test
-    fun `an out of range offset is clamped rather than pushing the window off screen`() {
-        val above = OverlayLayoutResolver.resolve(portrait, placement.copy(offsetFraction = 4f), 3f)
-        val below = OverlayLayoutResolver.resolve(portrait, placement.copy(offsetFraction = -2f), 3f)
-
-        assertEquals(1656, above.yOffset)
-        assertEquals(124, below.yOffset)
+    @Test fun `small displays shrink instead of creating a full screen touch sheet`() {
+        val r = OverlayLayoutResolver.resolve(ScreenBounds(200, 200), placement, 2f)
+        assertTrue(r.isValid)
+        assertTrue(r.windowHeightPx <= 200 * OverlayLayoutResolver.MAX_TOUCH_LENGTH_RATIO)
+        assertTrue(r.xOffset + r.windowWidthPx <= 200)
+        assertTrue(r.yOffset + r.windowHeightPx <= 200)
     }
 
-    @Test
-    fun `unknown screen bounds produce an invalid placement`() {
-        val result = OverlayLayoutResolver.resolve(ScreenBounds.EMPTY, placement, 3f)
+    @Test fun `empty or fully inset screens are not valid windows`() {
+        assertFalse(OverlayLayoutResolver.resolve(ScreenBounds.EMPTY, placement, 3f).isValid)
+        assertFalse(OverlayLayoutResolver.resolve(ScreenBounds(200, 200, insetTopPx = 200), placement, 3f).isValid)
+    }
 
-        assertFalse(result.isValid)
-        assertEquals(0, result.windowWidthPx)
+    @Test fun `screen rotation constants map deterministically`() {
+        assertEquals(DisplayRotation.LEFT, DisplayRotation.fromSurface(1))
+        assertEquals(DisplayRotation.RIGHT, DisplayRotation.fromSurface(3))
+        assertEquals(DisplayRotation.NATURAL, DisplayRotation.fromSurface(999))
     }
 }

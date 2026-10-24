@@ -3,10 +3,8 @@ package dev.virtualvolume.app.boot
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import dev.virtualvolume.app.appContainer
 import dev.virtualvolume.app.core.platform.OverlayPermission
-import dev.virtualvolume.app.core.platform.OverlayRuntime
 import dev.virtualvolume.app.core.platform.OverlayStartResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -14,55 +12,34 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
-/**
- * Brings the control back after a reboot or an app update — but only when the user asked
- * for it (the "Start after reboot" switch) and Android allows it.
- *
- * On Android 12+ a background app may not start a foreground service from a broadcast.
- * Holding the user-granted SYSTEM_ALERT_WINDOW permission is one of the documented
- * exemptions, so this normally works; when it does not, the failure is recorded in
- * [OverlayRuntime] and surfaced on the dashboard instead of being swallowed.
- */
+/** Best-effort restoration, opt-in only. The receiver never fights Android's start limits. */
 class BootReceiver : BroadcastReceiver() {
-
     override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.action
-        if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) {
-            return
-        }
-
-        val appContext = context.applicationContext
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         val pending = goAsync()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
+        val app = context.applicationContext
         scope.launch {
             try {
-                val container = appContext.appContainer
-                val settings = container.settingsRepository.settings.first()
-                if (!settings.enabled || !settings.startOnBoot) return@launch
-                if (!OverlayPermission.isGranted(appContext)) return@launch
-
-                when (val result = container.overlayServiceController.start()) {
-                    is OverlayStartResult.Started -> Unit
-                    is OverlayStartResult.MissingOverlayPermission ->
-                        OverlayRuntime.reportError("Overlay permission missing after reboot")
-
-                    is OverlayStartResult.Blocked -> {
-                        Log.w(TAG, "Restart after boot refused: ${result.message}")
-                        OverlayRuntime.reportError(result.message)
+                withTimeout(8_000) {
+                    val container = app.appContainer
+                    val settings = container.settingsRepository.settings.first()
+                    val restoringBoot = intent.action == Intent.ACTION_BOOT_COMPLETED
+                    if (!settings.enabled || (restoringBoot && !settings.startOnBoot)) return@withTimeout
+                    val message = if (!OverlayPermission.isGranted(app)) {
+                        "Overlay permission is missing. Open Virtual Volume to grant it and resume the control."
+                    } else when (container.overlayServiceController.start()) {
+                        OverlayStartResult.Started -> null
+                        OverlayStartResult.MissingOverlayPermission -> "Grant overlay permission in Virtual Volume to resume the control."
+                        is OverlayStartResult.Blocked -> "Android blocked automatic restoration. Open Virtual Volume and tap Resume control; no background restrictions were bypassed."
                     }
+                    container.settingsRepository.update { it.copy(serviceNotice = message) }
                 }
-            } catch (throwable: Throwable) {
-                Log.w(TAG, "Could not restore the volume control after boot", throwable)
-            } finally {
-                pending.finish()
-                scope.cancel()
-            }
+            } catch (error: Exception) {
+                if (error !is kotlinx.coroutines.CancellationException) dev.virtualvolume.app.core.platform.OverlayRuntime.reportError("Automatic restoration was unavailable. Open Virtual Volume to resume.")
+            } finally { pending.finish(); scope.cancel() }
         }
-    }
-
-    companion object {
-        private const val TAG = "BootReceiver"
     }
 }

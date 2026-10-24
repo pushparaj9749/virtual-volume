@@ -45,6 +45,7 @@ fun VolumeControlPreview(
         },
         update = { view ->
             view.style = ControlSpecFactory.style(settings, density)
+            view.physicalEdge = settings.edge
             view.gestureConfig = ControlSpecFactory.gestureConfig(
                 settings = settings,
                 density = density,

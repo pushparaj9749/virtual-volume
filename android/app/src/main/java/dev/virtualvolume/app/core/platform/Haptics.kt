@@ -1,6 +1,8 @@
 package dev.virtualvolume.app.core.platform
 
 import android.content.Context
+import android.os.SystemClock
+import android.provider.Settings
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -16,11 +18,12 @@ import android.util.Log
  */
 class Haptics(context: Context) {
 
+    private val resolver = context.applicationContext.contentResolver
     private val vibrator: Vibrator? = resolveVibrator(context)
 
-    private var lastTickAt = 0L
+    private var lastTickAt = -MIN_TICK_INTERVAL_MS
 
-    fun tick(now: Long = System.currentTimeMillis()) {
+    fun tick(now: Long = SystemClock.uptimeMillis()) {
         if (now - lastTickAt < MIN_TICK_INTERVAL_MS) return
         lastTickAt = now
         play(VibrationEffects.tick())
@@ -29,6 +32,7 @@ class Haptics(context: Context) {
     fun confirm() = play(VibrationEffects.confirm())
 
     private fun play(effect: VibrationEffect) {
+        if (runCatching { Settings.System.getInt(resolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) }.getOrDefault(1) == 0) return
         val device = vibrator ?: return
         if (!device.hasVibrator()) return
         runCatching { device.vibrate(effect) }

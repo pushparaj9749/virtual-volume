@@ -17,6 +17,8 @@ class VolumeSettingsTest {
         assertTrue(defaults.activeOpacity >= defaults.idleOpacity)
         assertEquals(ScreenEdge.RIGHT, defaults.edge)
         assertEquals(VolumeStreamType.MEDIA, defaults.audioStream)
+        // Call volume behaves like the hardware rocker unless the user opts out.
+        assertTrue(defaults.followActiveCall)
         assertEquals(TapMode.SPLIT, defaults.tapMode)
         assertEquals(ThemeMode.DARK, defaults.themeMode)
         assertEquals(1, defaults.volumeStep)
@@ -76,6 +78,7 @@ class VolumeSettingsTest {
             hapticsEnabled = false,
             volumeStep = 3,
             audioStream = VolumeStreamType.RING,
+            followActiveCall = false,
             tapMode = TapMode.ALWAYS_DECREASE,
             themeMode = ThemeMode.LIGHT,
             onboardingCompleted = true,
@@ -100,6 +103,18 @@ class VolumeSettingsTest {
         assertEquals(VolumeStreamType.DEFAULT, VolumeStreamType.fromName(null))
         assertEquals(TapMode.DEFAULT, TapMode.fromName("tap-all"))
         assertEquals(ThemeMode.DEFAULT, ThemeMode.fromName("SEPIA"))
+    }
+
+    @Test fun `nonfinite preferences recover to finite defaults`() {
+        val invalid = VolumeSettings(idleOpacity = Float.NaN, lengthDp = Float.POSITIVE_INFINITY, offsetFraction = Float.NaN).sanitized()
+        assertEquals(VolumeSettings.DEFAULT.idleOpacity, invalid.idleOpacity, 0f)
+        assertEquals(VolumeSettings.DEFAULT.lengthDp, invalid.lengthDp, 0f)
+        assertEquals(VolumeSettings.DEFAULT.offsetFraction, invalid.offsetFraction, 0f)
+    }
+
+    @Test fun `active opacity never becomes less visible than idle`() {
+        val settings = VolumeSettings(idleOpacity = 0.9f, activeOpacity = 0.4f).sanitized()
+        assertTrue(settings.activeOpacity >= settings.idleOpacity)
     }
 
     @Test

@@ -21,8 +21,8 @@ class ControlSpecFactoryTest {
 
         assertEquals(396f, style.lengthPx, 0.001f) // 132dp
         assertEquals(15f, style.thicknessPx, 0.001f) // 5dp
-        assertEquals(570f, style.touchLengthPx, 0.001f) // 190dp wins over the minimum
-        assertEquals(120f, style.touchWidthPx, 0.001f) // 40dp wins over the minimum
+        assertEquals(492f, style.touchLengthPx, 0.001f) // 164dp wins over the minimum
+        assertEquals(96f, style.touchWidthPx, 0.001f) // 32dp wins over the minimum
         assertEquals(0.42f, style.idleAlpha, 0.001f)
         assertEquals(1f, style.activeAlpha, 0.001f)
     }
@@ -64,7 +64,7 @@ class ControlSpecFactoryTest {
 
         // 396px bar / 15 levels / sensitivity 1.0
         assertEquals(26.4f, config.pixelsPerStep, 0.001f)
-        assertEquals(285f, config.tapSplitY, 0.001f) // half the touch zone
+        assertEquals(246f, config.tapSplitY, 0.001f) // half the touch zone
         assertEquals(30f, config.touchSlopPx, 0.001f) // 10dp floor beats the 24px system slop
     }
 
@@ -89,6 +89,6 @@ class ControlSpecFactoryTest {
 
         assertEquals(0.42f, placement.offsetFraction, 0.001f)
         assertEquals(396f, placement.lengthPx, 0.001f)
-        assertEquals(570f, placement.touchLengthPx, 0.001f)
+        assertEquals(492f, placement.touchLengthPx, 0.001f)
     }
 }

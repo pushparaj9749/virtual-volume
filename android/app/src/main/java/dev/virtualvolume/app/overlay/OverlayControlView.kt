@@ -6,6 +6,10 @@ import android.graphics.Canvas
 import android.graphics.RectF
 import android.view.MotionEvent
 import android.view.View
+import android.view.accessibility.AccessibilityNodeInfo
+import android.os.Bundle
+import dev.virtualvolume.app.core.data.ScreenEdge
+import kotlin.math.abs
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 
@@ -13,7 +17,7 @@ import android.view.animation.DecelerateInterpolator
  * The floating volume rocker itself: a thin bar that brightens while it is touched.
  *
  * The view owns no policy. It draws whatever [ControlStyle] describes, forwards raw
- * `y` coordinates to [GestureEngine], and reports steps through [listener]. Keeping it
+ * relative coordinates to [GestureEngine], and reports steps through [listener]. Keeping it
  * this thin is what lets the onboarding tutorial and the settings preview reuse the exact
  * same drawing and gesture code.
  */
@@ -33,6 +37,20 @@ class OverlayControlView(context: Context) : View(context) {
             }
             invalidate()
         }
+
+    var displayRotation: DisplayRotation = DisplayRotation.NATURAL
+        set(value) {
+            if (field != value) cancelGesture()
+            field = value
+            invalidate()
+        }
+
+    var physicalEdge: ScreenEdge = ScreenEdge.RIGHT
+
+    private var pointerId = -1
+    private var downX = 0f
+    private var downY = 0f
+    private var horizontalDrag: Boolean? = null
 
     /** Receives the interpreted gestures. */
     var listener: GestureListener? = null
@@ -76,7 +94,9 @@ class OverlayControlView(context: Context) : View(context) {
 
     init {
         contentDescription = CONTENT_DESCRIPTION
-        isFocusable = false
+        isFocusable = true
+        isClickable = true
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
     /** Sets the fill level. [animate] is used for taps, dragging updates immediately. */
@@ -102,47 +122,112 @@ class OverlayControlView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        val canonicalWidth = if (displayRotation.isHorizontal) height.toFloat() else width.toFloat()
+        val canonicalHeight = if (displayRotation.isHorizontal) width.toFloat() else height.toFloat()
+        val saved = canvas.save()
+        when (displayRotation) {
+            DisplayRotation.NATURAL -> Unit
+            DisplayRotation.LEFT -> { canvas.translate(0f, height.toFloat()); canvas.rotate(-90f) }
+            DisplayRotation.INVERTED -> { canvas.translate(width.toFloat(), height.toFloat()); canvas.rotate(180f) }
+            DisplayRotation.RIGHT -> { canvas.translate(width.toFloat(), 0f); canvas.rotate(90f) }
+        }
         val padding = ControlPainter.contentPadding(style).toFloat()
-        val available = (height - padding * 2f).coerceAtLeast(1f)
-        val barLength = style.lengthPx.coerceIn(1f, available)
-        val centerX = width / 2f
-        val top = (height - barLength) / 2f
-        val halfThickness = (style.thicknessPx / 2f).coerceAtMost(width / 2f)
-
-        barRect.set(centerX - halfThickness, top, centerX + halfThickness, top + barLength)
+        val barLength = style.lengthPx.coerceIn(1f, (canonicalHeight - padding * 2f).coerceAtLeast(1f))
+        val half = (style.thicknessPx / 2f).coerceAtMost(canonicalWidth / 2f)
+        val edgeDistance = maxOf(half + 1f, 8f * resources.displayMetrics.density).coerceAtMost(canonicalWidth / 2f)
+        val centerX = if (physicalEdge == ScreenEdge.RIGHT) canonicalWidth - edgeDistance else edgeDistance
+        val top = (canonicalHeight - barLength) / 2f
+        barRect.set(centerX - half, top, centerX + half, top + barLength)
         painter.draw(canvas, barRect, displayedLevel, activeProgress)
+        canvas.restoreToCount(saved)
     }
 
-    override fun onTouchEvent(event: MotionEvent): Boolean = when (event.actionMasked) {
-        MotionEvent.ACTION_DOWN -> engine.onDown(event.y)
-        MotionEvent.ACTION_MOVE -> {
-            engine.onMove(event.y)
-            true
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                pointerId = event.getPointerId(0)
+                downX = event.x
+                downY = event.y
+                horizontalDrag = null
+                parent?.requestDisallowInterceptTouchEvent(true)
+                return engine.onDown(0f, event.eventTime)
+            }
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_CANCEL -> cancelGesture()
+            MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP -> {
+                val index = event.findPointerIndex(pointerId)
+                if (index < 0) { cancelGesture(); return true }
+                val x = event.getX(index)
+                val y = event.getY(index)
+                val dx = x - downX
+                val dy = y - downY
+                if (horizontalDrag == null && maxOf(abs(dx), abs(dy)) > gestureConfig.touchSlopPx) {
+                    if (!displayRotation.isHorizontal && abs(dx) > abs(dy) * 1.5f) {
+                        cancelGesture() // A sideways brush is not a split tap.
+                        return true
+                    }
+                    horizontalDrag = displayRotation.isHorizontal && abs(dx) > abs(dy)
+                }
+                // In landscape, both screen-up/down AND dragging along the bar work.
+                val drag = if (horizontalDrag == true) {
+                    if (displayRotation == DisplayRotation.RIGHT) -dx else dx
+                } else dy
+                if (event.actionMasked == MotionEvent.ACTION_MOVE) engine.onMove(drag, event.eventTime)
+                else {
+                    gestureConfig = gestureConfig.copy(tapSplitY = canonicalLength() / 2f)
+                    engine.onUp(drag, event.eventTime, canonicalTapPosition(x, y))
+                    pointerId = -1
+                    parent?.requestDisallowInterceptTouchEvent(false)
+                }
+            }
+            else -> return pointerId != -1
         }
-
-        MotionEvent.ACTION_UP -> {
-            engine.onUp(event.y)
-            true
-        }
-
-        MotionEvent.ACTION_CANCEL -> {
-            engine.onCancel()
-            true
-        }
-
-        else -> false
+        return true
     }
 
-    /**
-     * Accessibility entry point: a TalkBack double-tap raises the volume by one step,
-     * which is the closest equivalent of the swipe the control is built around.
-     */
+    fun cancelGesture() {
+        engine.onCancel()
+        pointerId = -1
+        horizontalDrag = null
+        parent?.requestDisallowInterceptTouchEvent(false)
+    }
+
+    private fun canonicalLength(): Float = if (displayRotation.isHorizontal) width.toFloat() else height.toFloat()
+
+    private fun canonicalTapPosition(x: Float, y: Float): Float = when (displayRotation) {
+        DisplayRotation.NATURAL -> y
+        DisplayRotation.LEFT -> x
+        DisplayRotation.INVERTED -> height - y
+        DisplayRotation.RIGHT -> width - x
+    }
+
     override fun performClick(): Boolean {
-        listener?.onStep(1, fromTap = true)
-        return super.performClick()
+        listener?.onGestureStart()
+        listener?.onStep(if (gestureConfig.tapMode == dev.virtualvolume.app.core.data.TapMode.ALWAYS_DECREASE) -1 else 1, true)
+        listener?.onGestureEnd()
+        super.performClick()
+        return true
+    }
+
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        info.className = "android.widget.SeekBar"
+        info.rangeInfo = AccessibilityNodeInfo.RangeInfo.obtain(AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, 0f, 100f, targetLevel * 100f)
+        info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
+        info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
+    }
+
+    override fun performAccessibilityAction(action: Int, arguments: Bundle?): Boolean {
+        if (action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD || action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) {
+            listener?.onGestureStart()
+            listener?.onStep(if (action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) 1 else -1, true)
+            listener?.onGestureEnd()
+            return true
+        }
+        return super.performAccessibilityAction(action, arguments)
     }
 
     override fun onDetachedFromWindow() {
+        cancelGesture()
         cancelAnimators()
         super.onDetachedFromWindow()
     }

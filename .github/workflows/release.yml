@@ -54,9 +54,19 @@ jobs:
         id: version
         run: |
           set -euo pipefail
-          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
-          VERSION_CODE=$(grep -oP 'versionCode\s*=\s*\K[0-9]+' app/build.gradle.kts)
-          TAG="${GITHUB_REF_NAME:-v$VERSION_NAME}"
+          VERSION_NAME=$(grep -oP '^versionName=\K[^\r\n]+' version.properties)
+          VERSION_CODE=$(grep -oP '^versionCode=\K[0-9]+' version.properties)
+          if [ "${GITHUB_REF_TYPE:-branch}" = "tag" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            # A manual release run from the session branch publishes the checked-out
+            # version, without incorrectly treating the branch name as a release tag.
+            TAG="v$VERSION_NAME"
+          fi
+          if [ "$TAG" != "v$VERSION_NAME" ]; then
+            echo "::error::Release tag $TAG does not match version.properties ($VERSION_NAME)"
+            exit 1
+          fi
           {
             echo "name=$VERSION_NAME"
             echo "code=$VERSION_CODE"
@@ -151,8 +161,14 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${{ steps.version.outputs.tag }}"
-          PREVIOUS=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
           NOTES="$RUNNER_TEMP/notes.md"
+          if git show-ref --verify --quiet "refs/tags/$TAG"; then
+            RANGE_END="$TAG"
+            PREVIOUS=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
+          else
+            RANGE_END=HEAD
+            PREVIOUS=$(git describe --tags --abbrev=0 HEAD 2>/dev/null || true)
+          fi
           {
             echo "**Virtual Volume ${{ steps.version.outputs.name }}** (versionCode ${{ steps.version.outputs.code }})"
             echo
@@ -167,7 +183,7 @@ jobs:
             if [ -n "$PREVIOUS" ]; then
               echo "### Changes since $PREVIOUS"
               echo
-              git log --no-merges --pretty='- %s' "$PREVIOUS".."$TAG"
+              git log --no-merges --pretty='- %s' "$PREVIOUS".."$RANGE_END"
             else
               echo "### First release"
               echo
