@@ -1,5 +1,6 @@
 package dev.virtualvolume.app.core.platform
 
+import dev.virtualvolume.app.overlay.WindowPlacement
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +17,10 @@ object OverlayRuntime {
 
     private val _isServiceRunning = MutableStateFlow(false)
     val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
+
+    private val _placement = MutableStateFlow<WindowPlacement?>(null)
+    val placement: StateFlow<WindowPlacement?> = _placement.asStateFlow()
+    fun setPlacement(value: WindowPlacement?) { _placement.value = value }
 
     private val _lastError = MutableStateFlow<String?>(null)
     val lastError: StateFlow<String?> = _lastError.asStateFlow()

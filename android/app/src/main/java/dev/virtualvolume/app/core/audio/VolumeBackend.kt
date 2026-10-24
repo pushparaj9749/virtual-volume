@@ -1,66 +1,32 @@
 package dev.virtualvolume.app.core.audio
 
 import android.media.AudioManager
-import android.util.Log
+import android.os.Build
 import dev.virtualvolume.app.core.data.VolumeStreamType
 
-/**
- * Thin abstraction over the platform volume APIs so the controller (and its tests) never
- * touch [AudioManager] directly.
- */
 interface VolumeBackend {
+    fun minVolume(stream: VolumeStreamType): Int = 0
     fun maxVolume(stream: VolumeStreamType): Int
     fun currentVolume(stream: VolumeStreamType): Int
+    fun isFixedVolume(): Boolean = false
     fun setVolume(stream: VolumeStreamType, index: Int)
 }
 
-/** [VolumeBackend] backed by the real system [AudioManager]. */
-class AudioManagerBackend(private val audioManager: AudioManager) : VolumeBackend {
-
-    override fun maxVolume(stream: VolumeStreamType): Int =
-        audioManager.getStreamMaxVolume(stream.streamConstant)
-
-    override fun currentVolume(stream: VolumeStreamType): Int =
-        audioManager.getStreamVolume(stream.streamConstant)
-
+/** Only this adapter knows AudioManager. No hidden APIs or simulated values. */
+class AudioManagerBackend(private val audioManager: AudioManager?) : VolumeBackend {
+    override fun minVolume(stream: VolumeStreamType): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) requireNotNull(audioManager).getStreamMinVolume(stream.streamConstant) else 0
+    override fun maxVolume(stream: VolumeStreamType): Int = requireNotNull(audioManager).getStreamMaxVolume(stream.streamConstant)
+    override fun currentVolume(stream: VolumeStreamType): Int = requireNotNull(audioManager).getStreamVolume(stream.streamConstant)
+    override fun isFixedVolume(): Boolean = audioManager?.isVolumeFixed ?: true
     override fun setVolume(stream: VolumeStreamType, index: Int) {
-        // No FLAG_SHOW_UI: the floating control is the UI, and the system volume dialog
-        // would fight it for the same gesture.
-        audioManager.setStreamVolume(stream.streamConstant, index, 0)
-
-        // A few OEM builds accept a write to the call stream and quietly ignore it. The
-        // mismatch is logged rather than thrown: the gesture already completed and the
-        // next read shows the volume that really took effect.
-        runCatching { audioManager.getStreamVolume(stream.streamConstant) }
-            .onSuccess { applied ->
-                if (applied != index) {
-                    Log.w(TAG, "System kept $stream volume at $applied instead of $index")
-                }
-            }
-    }
-
-    private companion object {
-        private const val TAG = "AudioManagerBackend"
-    }
-}
-
-/** Safe reader that never throws into the gesture path. */
-class SafeVolumeReader(private val backend: VolumeBackend) {
-
-    fun maxVolume(stream: VolumeStreamType): Int =
-        runCatching { backend.maxVolume(stream) }
-            .onFailure { Log.w(TAG, "Could not read max volume for $stream", it) }
-            .getOrNull()
-            ?.takeIf { it > 0 }
-            ?: 0
-
-    fun currentVolume(stream: VolumeStreamType): Int =
-        runCatching { backend.currentVolume(stream) }
-            .onFailure { Log.w(TAG, "Could not read volume for $stream", it) }
-            .getOrNull()
-            ?: -1
-
-    companion object {
-        private const val TAG = "SafeVolumeReader"
+        // This is the same public AudioManager path used by system volume controls. The
+        // flag asks AudioService to show its native volume panel; it does not draw an
+        // app-owned substitute, and every drag step keeps that panel in sync.
+        requireNotNull(audioManager).setStreamVolume(
+            stream.streamConstant,
+            index,
+            AudioManager.FLAG_SHOW_UI,
+        )
     }
 }

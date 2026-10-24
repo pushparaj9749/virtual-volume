@@ -7,9 +7,12 @@ data class VolumeState(
     val stream: VolumeStreamType,
     val index: Int,
     val max: Int,
+    val min: Int = 0,
 ) {
     val fraction: Float
-        get() = if (max <= 0) 0f else (index.toFloat() / max.toFloat()).coerceIn(0f, 1f)
+        get() = if (max <= min || index < min) 0f else ((index - min).toFloat() / (max - min).toFloat()).coerceIn(0f, 1f)
+
+    val available: Boolean get() = index >= min && max > min
 
     companion object {
         val UNKNOWN = VolumeState(VolumeStreamType.DEFAULT, index = -1, max = 0)
@@ -18,7 +21,7 @@ data class VolumeState(
 
 /** Outcome of a volume change attempt. */
 sealed interface VolumeResult {
-    data class Success(val state: VolumeState) : VolumeResult
+    data class Success(val state: VolumeState, val changed: Boolean = false) : VolumeResult
     data class Failure(val message: String) : VolumeResult
 }
 
@@ -34,7 +37,7 @@ object VolumeMath {
 
     /** Applies a signed step delta and clamps to the device range. */
     fun applyStep(current: Int, deltaSteps: Int, stepSize: Int, max: Int, min: Int = 0): Int =
-        clamp(current + deltaSteps * stepSize, max, min)
+        (current.toLong() + deltaSteps.toLong() * stepSize.toLong()).coerceIn(min.toLong(), max.toLong()).toInt()
 
     /**
      * How many pixels of drag equal one volume step.

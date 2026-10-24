@@ -9,11 +9,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.virtualvolume.app.appContainer
-import dev.virtualvolume.app.core.audio.CallAudioMode
 import dev.virtualvolume.app.core.audio.VolumeState
-import dev.virtualvolume.app.core.audio.VolumeStreamResolver
+import dev.virtualvolume.app.core.audio.VolumeResult
 import dev.virtualvolume.app.core.data.VolumeSettings
-import dev.virtualvolume.app.core.data.VolumeStreamType
 import dev.virtualvolume.app.core.platform.NotificationPermission
 import dev.virtualvolume.app.core.platform.OverlayPermission
 import dev.virtualvolume.app.core.platform.OverlayRuntime
@@ -28,8 +26,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -37,12 +37,6 @@ import kotlinx.coroutines.launch
 data class UiState(
     val settings: VolumeSettings = VolumeSettings.DEFAULT,
     val volume: VolumeState = VolumeState.UNKNOWN,
-    val callMode: CallAudioMode = CallAudioMode.IDLE,
-    /**
-     * The stream the control drives right now — the selected one, or call volume while a
-     * call is up and the user allowed the control to follow calls.
-     */
-    val activeStream: VolumeStreamType = VolumeStreamType.DEFAULT,
     val serviceRunning: Boolean = false,
     val overlayPermissionGranted: Boolean = false,
     val notificationsEnabled: Boolean = true,
@@ -55,13 +49,6 @@ data class UiState(
 
     val needsNotificationPermission: Boolean
         get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationsEnabled
-
-    /** True while the control is driving call volume instead of the selected stream. */
-    val followingCall: Boolean
-        get() = VolumeStreamResolver.isFollowingCall(
-            configured = settings.audioStream,
-            active = activeStream,
-        )
 }
 
 /** One-shot messages the UI turns into a snackbar or a settings screen. */
@@ -87,55 +74,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val events = Channel<UiEvent>(Channel.BUFFERED)
     val uiEvents: Flow<UiEvent> = events.receiveAsFlow()
 
-    /**
-     * Polls the audio mode only while the call-following option is on, and stops the
-     * moment it is turned off. Shared so the screen runs one poll, not one per consumer.
-     */
-    private val callModeFlow: StateFlow<CallAudioMode> = container.settingsRepository.settings
-        .map { it.followActiveCall }
+    private val volumeFlow: Flow<VolumeState> = container.settingsRepository.settings
+        .map { it.audioStream }
         .distinctUntilChanged()
-        .flatMapLatest { follow ->
-            if (follow) container.callAudioMonitor.modeChanges() else flowOf(CallAudioMode.IDLE)
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = CallAudioMode.IDLE,
-        )
-
-    private val activeStreamFlow: Flow<VolumeStreamType> =
-        combine(container.settingsRepository.settings, callModeFlow) { settings, mode ->
-            VolumeStreamResolver.resolve(settings.audioStream, mode, settings.followActiveCall)
-        }.distinctUntilChanged()
-
-    /** Service + permission state, which Android only lets the app re-read on resume. */
-    private val runtimeFlow: Flow<RuntimeSnapshot> =
-        combine(OverlayRuntime.isServiceRunning, permissions) { running, permission ->
-            RuntimeSnapshot(running, permission)
-        }
-
-    private val volumeFlow: Flow<VolumeState> = activeStreamFlow
         .flatMapLatest { stream ->
-            container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it).index }
-                .map { container.volumeController.snapshot(stream) }
+            merge(
+                container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it) },
+                container.volumeController.changes.filter { it.stream == stream },
+            )
         }
 
     val uiState: StateFlow<UiState> = combine(
         container.settingsRepository.settings,
         volumeFlow,
-        activeStreamFlow,
-        callModeFlow,
-        runtimeFlow,
-    ) { settings, volume, activeStream, mode, runtime ->
+        OverlayRuntime.isServiceRunning,
+        permissions,
+        OverlayRuntime.lastError,
+    ) { settings, volume, running, permission, error ->
         UiState(
             settings = settings,
             volume = volume,
-            callMode = mode,
-            activeStream = activeStream,
-            serviceRunning = runtime.serviceRunning,
-            overlayPermissionGranted = runtime.permission.overlay,
-            notificationsEnabled = runtime.permission.notifications,
-            runtimeError = OverlayRuntime.lastError.value,
+            serviceRunning = running,
+            overlayPermissionGranted = permission.overlay,
+            notificationsEnabled = permission.notifications,
+            runtimeError = error ?: settings.serviceNotice,
             isLoading = false,
         )
     }.stateIn(
@@ -151,22 +113,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             overlay = OverlayPermission.isGranted(app),
             notifications = NotificationPermission.isGranted(app),
         )
+        viewModelScope.launch {
+            val settings = container.settingsRepository.settings.first()
+            if (settings.enabled && settings.serviceNotice == null && permissions.value.overlay && !OverlayRuntime.isServiceRunning.value) {
+                container.overlayServiceController.start()
+            }
+        }
     }
 
     fun setEnabled(enabled: Boolean) {
         viewModelScope.launch {
-            container.settingsRepository.update { it.copy(enabled = enabled) }
-            if (enabled) {
-                when (val result = container.overlayServiceController.start()) {
-                    is OverlayStartResult.Started -> Unit
-                    is OverlayStartResult.MissingOverlayPermission ->
-                        events.send(UiEvent.RequestOverlayPermission)
-
-                    is OverlayStartResult.Blocked ->
-                        events.send(UiEvent.Error(result.message))
+            try {
+                when (val result = container.overlayServiceController.setEnabled(enabled)) {
+                    OverlayStartResult.Started -> {
+                        if (enabled && !NotificationPermission.isGranted(getApplication()) && Build.VERSION.SDK_INT >= 33) {
+                            events.send(UiEvent.RequestNotificationPermission)
+                        }
+                    }
+                    OverlayStartResult.MissingOverlayPermission -> events.send(UiEvent.RequestOverlayPermission)
+                    is OverlayStartResult.Blocked -> events.send(UiEvent.Error(result.message))
                 }
-            } else {
-                container.overlayServiceController.stop()
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                events.send(UiEvent.Error("Settings could not be saved. Please retry."))
             }
             TileStateSync.refresh(getApplication())
         }
@@ -174,29 +143,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateSettings(transform: (VolumeSettings) -> VolumeSettings) {
         viewModelScope.launch {
-            container.settingsRepository.update(transform)
+            try { container.settingsRepository.update(transform) }
+            catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                events.send(UiEvent.Error("Your preference could not be saved. Please retry."))
+            }
         }
     }
 
-    /** Drives the volume slider in the Audio section (call volume while on a call). */
+    /** Drives the media-volume slider in the Audio section. */
     fun setVolumeIndex(index: Int) {
         viewModelScope.launch {
-            container.volumeController.setIndex(uiState.value.activeStream, index)
+            handleVolumeResult(container.volumeController.setIndex(uiState.value.settings.audioStream, index))
         }
     }
 
     /** Applies a step coming from the in-app preview of the floating control. */
     fun applyPreviewStep(deltaSteps: Int) {
-        val state = uiState.value
-        val settings = state.settings
+        val settings = uiState.value.settings
         val result = container.volumeController.changeBy(
-            stream = state.activeStream,
+            stream = settings.audioStream,
             deltaSteps = deltaSteps,
             stepSize = settings.volumeStep,
         )
-        if (result is dev.virtualvolume.app.core.audio.VolumeResult.Success && settings.hapticsEnabled) {
-            container.haptics.tick()
-        }
+        handleVolumeResult(result)
+        if (result is VolumeResult.Success && result.changed && settings.hapticsEnabled) container.haptics.tick()
+    }
+
+    private fun handleVolumeResult(result: VolumeResult) {
+        if (result is VolumeResult.Failure) viewModelScope.launch { events.send(UiEvent.Error(result.message)) }
     }
 
     fun completeOnboarding() {
@@ -222,11 +197,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private data class PermissionSnapshot(val overlay: Boolean, val notifications: Boolean)
-
-    private data class RuntimeSnapshot(
-        val serviceRunning: Boolean,
-        val permission: PermissionSnapshot,
-    )
 
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {

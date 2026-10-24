@@ -15,7 +15,6 @@
     <string name="notification_title">Virtual Volume is active</string>
     <string name="notification_text">Touch the edge of your screen to change the volume.</string>
     <string name="notification_text_stream">Controlling %1$s volume</string>
-    <string name="notification_text_call">On a call · adjusting %1$s volume</string>
     <string name="notification_action_stop">Turn off</string>
     <string name="notification_action_open">Open app</string>
 
