@@ -36,6 +36,7 @@ internal object VolumeSettingsCodec {
     val KEY_HAPTICS_ENABLED = booleanPreferencesKey("haptics_enabled")
     val KEY_VOLUME_STEP = intPreferencesKey("volume_step")
     val KEY_AUDIO_STREAM = stringPreferencesKey("audio_stream")
+    val KEY_FOLLOW_ACTIVE_CALL = booleanPreferencesKey("follow_active_call")
     val KEY_TAP_MODE = stringPreferencesKey("tap_mode")
     val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
     val KEY_TILE_ADDED = booleanPreferencesKey("tile_added")
@@ -61,6 +62,7 @@ internal object VolumeSettingsCodec {
             hapticsEnabled = prefs[KEY_HAPTICS_ENABLED] ?: defaults.hapticsEnabled,
             volumeStep = prefs[KEY_VOLUME_STEP] ?: defaults.volumeStep,
             audioStream = VolumeStreamType.fromName(prefs[KEY_AUDIO_STREAM]),
+            followActiveCall = prefs[KEY_FOLLOW_ACTIVE_CALL] ?: defaults.followActiveCall,
             tapMode = TapMode.fromName(prefs[KEY_TAP_MODE]),
             themeMode = ThemeMode.fromName(prefs[KEY_THEME_MODE]),
             onboardingCompleted = prefs[KEY_ONBOARDING_COMPLETED] ?: defaults.onboardingCompleted,
@@ -86,6 +88,7 @@ internal object VolumeSettingsCodec {
         prefs[KEY_HAPTICS_ENABLED] = settings.hapticsEnabled
         prefs[KEY_VOLUME_STEP] = settings.volumeStep
         prefs[KEY_AUDIO_STREAM] = settings.audioStream.name
+        prefs[KEY_FOLLOW_ACTIVE_CALL] = settings.followActiveCall
         prefs[KEY_TAP_MODE] = settings.tapMode.name
         prefs[KEY_THEME_MODE] = settings.themeMode.name
         prefs[KEY_ONBOARDING_COMPLETED] = settings.onboardingCompleted

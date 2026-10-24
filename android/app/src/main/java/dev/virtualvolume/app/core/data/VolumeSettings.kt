@@ -24,6 +24,11 @@ data class VolumeSettings(
     val hapticsEnabled: Boolean = true,
     val volumeStep: Int = 1,
     val audioStream: VolumeStreamType = VolumeStreamType.DEFAULT,
+    /**
+     * Mirror the hardware rocker during calls: while a phone or VoIP call is up the control
+     * drives call volume instead of the selected stream, then goes back on hang up.
+     */
+    val followActiveCall: Boolean = true,
     val tapMode: TapMode = TapMode.DEFAULT,
     val themeMode: ThemeMode = ThemeMode.DEFAULT,
     val onboardingCompleted: Boolean = false,

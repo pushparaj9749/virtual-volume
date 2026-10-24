@@ -54,6 +54,10 @@ portrait **and both landscape rotations**.
   the onboarding tutorial.
 * **Real volume control** through `AudioManager` with strict range clamping; media is the default,
   ring/alarm/notification/call/system are modelled.
+* **Call volume that behaves like the hardware keys.** While a phone or VoIP call is up the control
+  drives **call volume** instead of the selected stream, then returns to your stream when you hang up.
+  It can be switched off in the Audio section, and the dashboard and notification always say which
+  stream the bar is on — a control that silently changes target would be worse than useless.
 * **Quick Settings tile** synchronised with the persisted preference and live service state.
 * **Onboarding**: welcome → overlay permission → enable → interactive tutorial → Quick Settings.
   It never repeats; a “Setup guide” replays it.
@@ -116,6 +120,7 @@ Key design decisions:
 | `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SPECIAL_USE` | Keep the control alive with the notification Android requires. |
 | `POST_NOTIFICATIONS` (API 33+) | Show the foreground-service notification. |
 | `VIBRATE` | Optional haptic tick. |
+| `MODIFY_AUDIO_SETTINGS` | Normal, install-time permission: Android requires it to write the voice-call stream during a call. Grants no network, phone or media access. |
 | `RECEIVE_BOOT_COMPLETED` | Restore the control after reboot when the user enables it. |
 
 The manifest requests **no internet permission** — the app cannot talk to the network.
@@ -224,6 +229,14 @@ These are platform rules, not bugs, and the app documents them honestly in-app:
 * **Background starts (Android 12+).** The system can refuse a foreground-service start from a broadcast
   (e.g. after boot). Holding the user-granted `SYSTEM_ALERT_WINDOW` permission is a documented exemption,
   so it normally works; otherwise opening the app or tapping the tile restores the control.
+* **Call detection.** A call is recognised from `AudioManager.mode` (`MODE_IN_CALL` / `MODE_IN_COMMUNICATION` /
+  `MODE_COMMUNICATION_REDIRECT`), which needs no permission at all. Android publishes no callback for that
+  value, so it is polled once a second — only while “Follow calls” is on. The stream is also re-checked the
+  instant a gesture begins, so the first touch after a call connects already changes call volume. Reading the
+  telephony call state instead would require `READ_PHONE_STATE`, which this app deliberately does not ask for.
+* **Hardware keys.** Android gives no app a way to intercept the physical volume rocker globally without an
+  accessibility service, so Virtual Volume *is* the rocker rather than a replacement for its events. The
+  system keys keep working exactly as they did, and the control now follows the same rules they do.
 * **OEM battery rules.** Some skins need an exclusion from battery optimisation for long-lived services.
 
 The app never attempts unsafe workarounds or claims capabilities Android forbids.
@@ -233,7 +246,8 @@ The app never attempts unsafe workarounds or claims capabilities Android forbids
 ## Privacy
 
 * No analytics, crash reporting, accounts, tracking or ad SDKs.
-* No internet permission in the app manifest.
+* No internet, phone-state, contacts or microphone permission in the app manifest. Call detection reads
+  the audio mode only.
 * Settings live in the app's private DataStore.
 * The website is static and loads no trackers; the download button only calls the GitHub API.
 

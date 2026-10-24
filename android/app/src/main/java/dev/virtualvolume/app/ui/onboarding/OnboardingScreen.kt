@@ -399,7 +399,7 @@ private fun VolumeReadout(state: UiState) {
         Spacer(Modifier.width(8.dp))
         Text(
             text = if (max > 0) {
-                "${state.volume.index.coerceAtLeast(0)} of $max · ${state.settings.audioStream.label}"
+                "${state.volume.index.coerceAtLeast(0)} of $max · ${state.activeStream.label}"
             } else {
                 "Volume unavailable on this device"
             },

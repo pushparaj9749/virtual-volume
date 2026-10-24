@@ -22,8 +22,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import dev.virtualvolume.app.R
 import dev.virtualvolume.app.appContainer
+import dev.virtualvolume.app.core.audio.CallAudioMode
 import dev.virtualvolume.app.core.audio.VolumeResult
 import dev.virtualvolume.app.core.audio.VolumeState
+import dev.virtualvolume.app.core.audio.VolumeStreamResolver
 import dev.virtualvolume.app.core.data.VolumeSettings
 import dev.virtualvolume.app.core.data.VolumeStreamType
 import dev.virtualvolume.app.core.platform.OverlayPermission
@@ -34,8 +36,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
@@ -51,6 +56,13 @@ class OverlayService : LifecycleService() {
     private var control: OverlayControlView? = null
     private var settings = VolumeSettings.DEFAULT
     private var volume = VolumeState.UNKNOWN
+
+    /**
+     * The stream actually being driven right now: the selected one, or call volume while a
+     * phone/VoIP call is up — the same rule the hardware rocker follows.
+     */
+    private var activeStream: VolumeStreamType = VolumeStreamType.DEFAULT
+    private val callMode = MutableStateFlow(CallAudioMode.IDLE)
     private var stopping = false
     private var notifiedStream: VolumeStreamType? = null
     private var screenReceiver: BroadcastReceiver? = null
@@ -73,6 +85,7 @@ class OverlayService : LifecycleService() {
         registerSystemListeners()
         observeSettings()
         observeAudio()
+        observeCallAudio()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -118,11 +131,7 @@ class OverlayService : LifecycleService() {
                     TileStateSync.refresh(this@OverlayService)
                 } else applySettings()
                 setScreenVisibility()
-                if (notifiedStream != latest.audioStream) {
-                    notifiedStream = latest.audioStream
-                    runCatching { getSystemService(NotificationManager::class.java)?.notify(OverlayNotification.NOTIFICATION_ID,
-                        OverlayNotification.build(this@OverlayService, getString(R.string.notification_text_stream, latest.audioStream.label))) }
-                }
+                publishNotification()
             }
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error
@@ -130,21 +139,87 @@ class OverlayService : LifecycleService() {
         }
     }
 
+    /** Watches the stream that is actually in use, which becomes call volume during a call. */
     private fun observeAudio() = scope.launch {
-        container.settingsRepository.settings.map { it.audioStream }.distinctUntilChanged().flatMapLatest { stream ->
-            merge(container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it) },
-                container.volumeController.changes.filter { it.stream == stream })
-        }.collect { refreshVolume() }
+        container.settingsRepository.settings
+            .combine(callMode) { latest, mode ->
+                VolumeStreamResolver.resolve(latest.audioStream, mode, latest.followActiveCall)
+            }
+            .distinctUntilChanged()
+            .flatMapLatest { stream ->
+                merge(container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it) },
+                    container.volumeController.changes.filter { it.stream == stream })
+            }.collect { refreshVolume() }
+    }
+
+    /**
+     * Follows phone and VoIP calls through `AudioManager.mode`: no phone permission, no
+     * notification listener and no accessibility service. Polling only runs while the
+     * option is enabled, and every gesture re-checks the mode before it acts.
+     */
+    private fun observeCallAudio() = scope.launch {
+        container.settingsRepository.settings.map { it.followActiveCall }.distinctUntilChanged()
+            .flatMapLatest { follow ->
+                if (follow) container.callAudioMonitor.modeChanges() else flowOf(CallAudioMode.IDLE)
+            }
+            .collect { mode ->
+                callMode.value = mode
+                // Re-reads the new stream, rebuilds the drag mapping and refreshes the
+                // notification whenever the target changed.
+                refreshVolume()
+            }
     }
 
     private fun refreshVolume() {
-        volume = container.volumeController.snapshot(settings.audioStream)
+        syncActiveStream()
+        volume = container.volumeController.snapshot(activeStream)
         if (volume.available) control?.setLevel(volume.fraction, animate = false)
         configureGesture()
+        publishNotification()
+    }
+
+    /**
+     * Mirrors the hardware keys: call volume wins while a call is up (when the user allows
+     * it), otherwise the stream the user picked. Re-resolved on every read, so a call that
+     * started between two polls is still handled before the first volume step is applied.
+     */
+    private fun syncActiveStream(mode: CallAudioMode = container.callAudioMonitor.currentMode()) {
+        val preferred = VolumeStreamResolver.resolve(
+            configured = settings.audioStream,
+            callMode = mode,
+            followCalls = settings.followActiveCall,
+        )
+        activeStream = if (preferred != settings.audioStream &&
+            container.volumeController.snapshot(preferred).max <= 0
+        ) {
+            // Some devices expose no call stream at all. Staying on the user's stream keeps
+            // the control usable instead of showing a bar that changes nothing.
+            settings.audioStream
+        } else {
+            preferred
+        }
+    }
+
+    /** Says plainly which stream the bar drives; a silent target change would be a trap. */
+    private fun publishNotification() {
+        val stream = activeStream
+        if (notifiedStream == stream) return
+        notifiedStream = stream
+        val text = if (stream != settings.audioStream) {
+            getString(R.string.notification_text_call, stream.label)
+        } else {
+            getString(R.string.notification_text_stream, stream.label)
+        }
+        runCatching {
+            getSystemService(NotificationManager::class.java)?.notify(
+                OverlayNotification.NOTIFICATION_ID,
+                OverlayNotification.build(this, text),
+            )
+        }
     }
 
     private fun applyStep(delta: Int, fromTap: Boolean) {
-        when (val result = container.volumeController.changeBy(settings.audioStream, delta, settings.volumeStep)) {
+        when (val result = container.volumeController.changeBy(activeStream, delta, settings.volumeStep)) {
             is VolumeResult.Success -> {
                 volume = result.state
                 control?.setLevel(volume.fraction, animate = fromTap)

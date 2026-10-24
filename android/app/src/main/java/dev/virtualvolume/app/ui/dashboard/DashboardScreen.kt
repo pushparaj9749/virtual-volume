@@ -515,9 +515,22 @@ private fun AudioSection(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Spacer(Modifier.height(14.dp))
+            SwitchRow(
+                title = "Follow calls",
+                subtitle = "While a call is up, the control adjusts call volume like the hardware buttons, " +
+                    "then goes back to your stream when you hang up.",
+                checked = settings.followActiveCall,
+                onCheckedChange = { follow -> onUpdateSettings { it.copy(followActiveCall = follow) } },
+            )
+            if (state.callMode.isInCall) {
+                Spacer(Modifier.height(6.dp))
+                CallModeNotice(following = state.followingCall, stream = state.activeStream)
+                Spacer(Modifier.height(8.dp))
+            } else {
+                Spacer(Modifier.height(14.dp))
+            }
             if (state.volume.available) SliderRow(
-                label = "${settings.audioStream.label} volume",
+                label = "${state.activeStream.label} volume",
                 valueLabel = if (state.volume.index >= 0) "$index / $maxVolume" else "Unavailable",
                 value = index.toFloat(),
                 valueRange = minVolume.toFloat()..maxVolume.toFloat(),
@@ -547,6 +560,39 @@ private fun AudioSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/**
+ * Shown only while a call is in progress, so "the bar changes call volume now" is never a
+ * surprise — it is the one moment the control does not drive the stream you picked.
+ */
+@Composable
+private fun CallModeNotice(following: Boolean, stream: VolumeStreamType) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primary),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            text = if (following) {
+                "On a call — the control is adjusting call volume"
+            } else {
+                "On a call — controlling ${stream.label.lowercase(Locale.getDefault())} volume"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 

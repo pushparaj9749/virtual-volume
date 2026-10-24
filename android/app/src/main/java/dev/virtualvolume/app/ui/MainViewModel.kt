@@ -9,9 +9,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.virtualvolume.app.appContainer
+import dev.virtualvolume.app.core.audio.CallAudioMode
 import dev.virtualvolume.app.core.audio.VolumeState
 import dev.virtualvolume.app.core.audio.VolumeResult
+import dev.virtualvolume.app.core.audio.VolumeStreamResolver
 import dev.virtualvolume.app.core.data.VolumeSettings
+import dev.virtualvolume.app.core.data.VolumeStreamType
 import dev.virtualvolume.app.core.platform.NotificationPermission
 import dev.virtualvolume.app.core.platform.OverlayPermission
 import dev.virtualvolume.app.core.platform.OverlayRuntime
@@ -26,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.merge
@@ -37,6 +41,12 @@ import kotlinx.coroutines.launch
 data class UiState(
     val settings: VolumeSettings = VolumeSettings.DEFAULT,
     val volume: VolumeState = VolumeState.UNKNOWN,
+    val callMode: CallAudioMode = CallAudioMode.IDLE,
+    /**
+     * The stream the control drives right now — the selected one, or call volume while a
+     * call is up and the user allowed the control to follow calls.
+     */
+    val activeStream: VolumeStreamType = VolumeStreamType.DEFAULT,
     val serviceRunning: Boolean = false,
     val overlayPermissionGranted: Boolean = false,
     val notificationsEnabled: Boolean = true,
@@ -49,6 +59,13 @@ data class UiState(
 
     val needsNotificationPermission: Boolean
         get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationsEnabled
+
+    /** True while the control is driving call volume instead of the selected stream. */
+    val followingCall: Boolean
+        get() = VolumeStreamResolver.isFollowingCall(
+            configured = settings.audioStream,
+            active = activeStream,
+        )
 }
 
 /** One-shot messages the UI turns into a snackbar or a settings screen. */
@@ -74,9 +91,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val events = Channel<UiEvent>(Channel.BUFFERED)
     val uiEvents: Flow<UiEvent> = events.receiveAsFlow()
 
-    private val volumeFlow: Flow<VolumeState> = container.settingsRepository.settings
-        .map { it.audioStream }
+    /**
+     * Polls the audio mode only while the call-following option is on, and stops the moment
+     * it is turned off. Shared so the screen runs one poll, not one per consumer.
+     */
+    private val callModeFlow: StateFlow<CallAudioMode> = container.settingsRepository.settings
+        .map { it.followActiveCall }
         .distinctUntilChanged()
+        .flatMapLatest { follow ->
+            if (follow) container.callAudioMonitor.modeChanges() else flowOf(CallAudioMode.IDLE)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = CallAudioMode.IDLE,
+        )
+
+    private val activeStreamFlow: Flow<VolumeStreamType> = combine(
+        container.settingsRepository.settings,
+        callModeFlow,
+    ) { settings, mode ->
+        VolumeStreamResolver.resolve(settings.audioStream, mode, settings.followActiveCall)
+    }.distinctUntilChanged()
+
+    private val volumeFlow: Flow<VolumeState> = activeStreamFlow
         .flatMapLatest { stream ->
             merge(
                 container.audioVolumeMonitor.observe(stream) { container.volumeController.snapshot(it) },
@@ -84,20 +122,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-    val uiState: StateFlow<UiState> = combine(
-        container.settingsRepository.settings,
-        volumeFlow,
+    /** Service, permission and error state, which Android only lets the app re-read on resume. */
+    private val runtimeFlow: Flow<RuntimeSnapshot> = combine(
         OverlayRuntime.isServiceRunning,
         permissions,
         OverlayRuntime.lastError,
-    ) { settings, volume, running, permission, error ->
+    ) { running, permission, error -> RuntimeSnapshot(running, permission, error) }
+
+    val uiState: StateFlow<UiState> = combine(
+        container.settingsRepository.settings,
+        volumeFlow,
+        activeStreamFlow,
+        callModeFlow,
+        runtimeFlow,
+    ) { settings, volume, activeStream, mode, runtime ->
         UiState(
             settings = settings,
             volume = volume,
-            serviceRunning = running,
-            overlayPermissionGranted = permission.overlay,
-            notificationsEnabled = permission.notifications,
-            runtimeError = error ?: settings.serviceNotice,
+            callMode = mode,
+            activeStream = activeStream,
+            serviceRunning = runtime.serviceRunning,
+            overlayPermissionGranted = runtime.permission.overlay,
+            notificationsEnabled = runtime.permission.notifications,
+            runtimeError = runtime.error ?: settings.serviceNotice,
             isLoading = false,
         )
     }.stateIn(
@@ -151,18 +198,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Drives the media-volume slider in the Audio section. */
+    /** Drives the volume slider in the Audio section — call volume while on a call. */
     fun setVolumeIndex(index: Int) {
         viewModelScope.launch {
-            handleVolumeResult(container.volumeController.setIndex(uiState.value.settings.audioStream, index))
+            handleVolumeResult(container.volumeController.setIndex(uiState.value.activeStream, index))
         }
     }
 
     /** Applies a step coming from the in-app preview of the floating control. */
     fun applyPreviewStep(deltaSteps: Int) {
-        val settings = uiState.value.settings
+        val state = uiState.value
+        val settings = state.settings
         val result = container.volumeController.changeBy(
-            stream = settings.audioStream,
+            stream = state.activeStream,
             deltaSteps = deltaSteps,
             stepSize = settings.volumeStep,
         )
@@ -197,6 +245,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private data class PermissionSnapshot(val overlay: Boolean, val notifications: Boolean)
+
+    private data class RuntimeSnapshot(
+        val serviceRunning: Boolean,
+        val permission: PermissionSnapshot,
+        val error: String?,
+    )
 
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {

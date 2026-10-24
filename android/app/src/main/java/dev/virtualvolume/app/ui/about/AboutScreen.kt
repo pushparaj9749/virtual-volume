@@ -136,6 +136,12 @@ fun AboutScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                 PermissionItem(
+                    title = "Audio settings",
+                    body = "An install-time permission Android requires to write the call-volume stream " +
+                        "during a call. It grants no internet, phone or microphone access.",
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                PermissionItem(
                     title = "Vibration",
                     body = "Only used for the optional haptic tick. Never for anything else.",
                 )
@@ -169,6 +175,11 @@ fun AboutScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 Bullet(
                     "Android 12+ can refuse a background start after a reboot. If that happens, opening the " +
                         "app or tapping the Quick Settings tile brings the control back.",
+                )
+                Bullet(
+                    "Calls are detected from the audio mode alone (no phone permission), checked once a " +
+                        "second while “Follow calls” is on. A very short VoIP call can therefore miss the " +
+                        "automatic switch — the first touch still re-checks before it changes anything.",
                 )
                 Bullet(
                     "Some manufacturers impose extra battery rules. If the service pauses, check your " +

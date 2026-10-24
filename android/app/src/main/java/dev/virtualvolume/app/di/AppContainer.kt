@@ -10,6 +10,7 @@ import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.preferences.preferencesDataStoreFile
 import dev.virtualvolume.app.core.audio.AudioManagerBackend
 import dev.virtualvolume.app.core.audio.AudioVolumeMonitor
+import dev.virtualvolume.app.core.audio.CallAudioMonitor
 import dev.virtualvolume.app.core.audio.VolumeController
 import dev.virtualvolume.app.core.data.SettingsRepository
 import dev.virtualvolume.app.core.platform.Haptics
@@ -50,6 +51,9 @@ class AppContainer(context: Context) {
     }
 
     val audioVolumeMonitor: AudioVolumeMonitor by lazy { AudioVolumeMonitor(appContext) }
+
+    /** Reports phone and VoIP calls so the control can follow call volume like the rocker. */
+    val callAudioMonitor: CallAudioMonitor by lazy { CallAudioMonitor(audioManager) }
 
     val haptics: Haptics by lazy { Haptics(appContext) }
 
