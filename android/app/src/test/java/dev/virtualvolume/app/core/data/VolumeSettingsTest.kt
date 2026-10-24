@@ -17,6 +17,8 @@ class VolumeSettingsTest {
         assertTrue(defaults.activeOpacity >= defaults.idleOpacity)
         assertEquals(ScreenEdge.RIGHT, defaults.edge)
         assertEquals(VolumeStreamType.MEDIA, defaults.audioStream)
+        // Call volume behaves like the hardware rocker unless the user opts out.
+        assertTrue(defaults.followActiveCall)
         assertEquals(TapMode.SPLIT, defaults.tapMode)
         assertEquals(ThemeMode.DARK, defaults.themeMode)
         assertEquals(1, defaults.volumeStep)
@@ -76,6 +78,7 @@ class VolumeSettingsTest {
             hapticsEnabled = false,
             volumeStep = 3,
             audioStream = VolumeStreamType.RING,
+            followActiveCall = false,
             tapMode = TapMode.ALWAYS_DECREASE,
             themeMode = ThemeMode.LIGHT,
             onboardingCompleted = true,

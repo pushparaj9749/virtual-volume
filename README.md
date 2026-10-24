@@ -54,14 +54,18 @@ portrait **and both landscape rotations**.
   the onboarding tutorial.
 * **Real volume control** through `AudioManager` with strict range clamping; media is the default,
   ring/alarm/notification/call/system are modelled.
+* **Call volume that behaves like the hardware keys.** While a phone or VoIP call is up the control
+  drives **call volume** instead of the selected stream, then returns to your stream when you hang up.
+  It can be switched off in the Audio section, and the dashboard and notification say plainly which
+  stream the bar is on — a control that silently changes target would be worse than useless.
 * **Quick Settings tile** synchronised with the persisted preference and live service state.
 * **Onboarding**: welcome → overlay permission → enable → interactive tutorial → Quick Settings.
   It never repeats; a “Setup guide” replays it.
 * **Customisation**: edge, position, length, thickness, idle opacity, active opacity, touch-zone
   size, swipe sensitivity, volume step, tap behaviour, animation duration, haptics, theme.
 * **Persistence** of every preference in Jetpack DataStore.
-* **Privacy-first**: no analytics, no accounts, no tracking, no advertising SDKs, and no internet
-  permission at all.
+* **Privacy-first**: no analytics, no accounts, no tracking, no advertising SDKs, no phone/contacts
+  permission, and no internet permission at all.
 
 ---
 
@@ -74,7 +78,8 @@ dependency container (one process, a handful of singletons — no graph library 
 dev.virtualvolume.app
 ├── core/
 │   ├── data/       # VolumeSettings, DataStore repository, enums (edge/stream/tap/theme)
-│   ├── audio/      # VolumeController, VolumeMath, AudioManagerBackend, volume observer
+│   ├── audio/      # VolumeController, VolumeMath, backend, volume + call monitors,
+│   │               # VolumeStreamResolver (which stream the control drives)
 │   └── platform/   # Permissions, Haptics, OverlayRuntime, OverlayServiceController
 ├── overlay/        # OverlayService, window host, gesture engine, layout resolver, control view
 ├── tile/           # Quick Settings tile + state sync
@@ -85,8 +90,9 @@ dev.virtualvolume.app
 
 Key design decisions:
 
-* **Pure domain logic** (`GestureEngine`, `OverlayLayoutResolver`, `VolumeMath`, `ControlSpecFactory`)
-  is free of Android types and is covered by JVM unit tests. The Android layers are thin adapters.
+* **Pure domain logic** (`GestureEngine`, `OverlayLayoutResolver`, `VolumeMath`, `ControlSpecFactory`,
+  `VolumeStreamResolver`) is free of Android types and is covered by JVM unit tests. The Android
+  layers are thin adapters.
 * **One drawing implementation** (`ControlPainter`) renders the control in the overlay, the settings
   preview and the onboarding tutorial, so the look never diverges.
 * **The settings preview is the real control** — an `AndroidView` wrapping `OverlayControlView` — not a
@@ -113,6 +119,7 @@ Key design decisions:
 | Permission | Why |
 |------------|-----|
 | `SYSTEM_ALERT_WINDOW` | Draw the control over other apps. Required, revocable. |
+| `MODIFY_AUDIO_SETTINGS` | Normal, install-time permission: Android requires it to write the voice-call stream during a call. Grants no network, phone or media access. |
 | `FOREGROUND_SERVICE` + `FOREGROUND_SERVICE_SPECIAL_USE` | Keep the control alive with the notification Android requires. |
 | `POST_NOTIFICATIONS` (API 33+) | Show the foreground-service notification. |
 | `VIBRATE` | Optional haptic tick. |
@@ -232,6 +239,14 @@ These are platform rules, not bugs, and the app documents them honestly in-app:
 * **Background starts (Android 12+).** The system can refuse a foreground-service start from a broadcast
   (e.g. after boot). Holding the user-granted `SYSTEM_ALERT_WINDOW` permission is a documented exemption,
   so it normally works; otherwise opening the app or tapping the tile restores the control.
+* **Call detection.** A call is recognised from `AudioManager.mode` (`MODE_IN_CALL` / `MODE_IN_COMMUNICATION`),
+  which needs no permission at all. Android publishes no callback for that value, so it is polled once a
+  second — only while “Follow calls” is on. The stream is also re-checked the instant a gesture begins, so
+  the first touch after a call connects already changes call volume. Reading the telephony call state
+  instead would require `READ_PHONE_STATE`, which this app deliberately does not ask for.
+* **Hardware keys.** Android gives no app a way to intercept the physical volume rocker globally without an
+  accessibility service, so Virtual Volume is the rocker rather than a replacement for its events. The
+  system keys keep working as they always did; the control follows the same rules they do.
 * **OEM battery rules.** Some skins need an exclusion from battery optimisation for long-lived services.
 
 The app never attempts unsafe workarounds or claims capabilities Android forbids.
@@ -241,7 +256,8 @@ The app never attempts unsafe workarounds or claims capabilities Android forbids
 ## Privacy
 
 * No analytics, crash reporting, accounts, tracking or ad SDKs.
-* No internet permission in the app manifest.
+* No internet, phone-state, contacts or microphone permission in the app manifest. Call detection reads
+  the audio mode only.
 * Settings live in the app's private DataStore.
 * The website is static and loads no trackers; the download button only calls the GitHub API.
 

@@ -190,8 +190,12 @@
           <p>A calm dark interface with an optional light theme, Material 3 typography and accessible contrast throughout.</p>
         </article>
         <article class="card reveal">
+          <h3>Call volume, automatically</h3>
+          <p>While a phone or VoIP call is up, the control drives call volume — the same thing the hardware keys do — then returns to your stream when you hang up.</p>
+        </article>
+        <article class="card reveal">
           <h3>Media today, more later</h3>
-          <p>Media volume is the default because it is what you reach for most. Ring, alarm, notification, call and system streams are already modelled.</p>
+          <p>Media volume is the default because it is what you reach for most. Ring, alarm, notification, call and system streams are all selectable in the Audio section.</p>
         </article>
       </div>
     </div>
@@ -354,11 +358,11 @@
         </details>
         <details>
           <summary>Will it drain my battery?</summary>
-          <p>The overlay is a small, hardware-accelerated view that draws only when it changes. There is no polling loop, no wake lock and no background work while you are not touching it.</p>
+          <p>The overlay is a small, hardware-accelerated view that draws only when it changes, and it holds no wake lock. To notice when a call starts it reads <code>AudioManager.mode</code> once a second — only while “Follow calls” is on — which costs nothing measurable and never wakes a sleeping phone.</p>
         </details>
         <details>
           <summary>Can it change ringer or alarm volume?</summary>
-          <p>Media volume is the default. Ring, alarm, notification, call and system streams are modelled in the app already and can be switched on in the Audio section.</p>
+          <p>Yes. Media volume is the default, and ring, alarm, notification, call and system streams can all be selected in the Audio section. Leave “Follow calls” on and the control switches to call volume by itself the moment a call connects, exactly like the physical buttons.</p>
         </details>
         <details>
           <summary>Is it on Google Play?</summary>

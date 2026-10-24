@@ -27,6 +27,20 @@ class AudioManagerBackend(private val audioManager: AudioManager) : VolumeBacken
         // No FLAG_SHOW_UI: the floating control is the UI, and the system volume dialog
         // would fight it for the same gesture.
         audioManager.setStreamVolume(stream.streamConstant, index, 0)
+
+        // A few OEM builds accept a write to the call stream and quietly ignore it. The
+        // mismatch is logged rather than thrown: the gesture already completed and the
+        // next read shows the volume that really took effect.
+        runCatching { audioManager.getStreamVolume(stream.streamConstant) }
+            .onSuccess { applied ->
+                if (applied != index) {
+                    Log.w(TAG, "System kept $stream volume at $applied instead of $index")
+                }
+            }
+    }
+
+    private companion object {
+        private const val TAG = "AudioManagerBackend"
     }
 }
 

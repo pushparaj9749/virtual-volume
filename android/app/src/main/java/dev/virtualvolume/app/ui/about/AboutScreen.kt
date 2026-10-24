@@ -139,6 +139,12 @@ fun AboutScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     title = "Vibration",
                     body = "Only used for the optional haptic tick. Never for anything else.",
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                PermissionItem(
+                    title = "Audio settings",
+                    body = "An install-time permission Android requires to write the call-volume stream " +
+                        "during a call. It grants no internet, phone or microphone access.",
+                )
             }
         }
 
@@ -173,6 +179,11 @@ fun AboutScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 Bullet(
                     "A few OEM skins add their own battery rules. Excluding Virtual Volume from battery " +
                         "optimisation keeps the control alive longer.",
+                )
+                Bullet(
+                    "Calls are detected from the audio mode alone (no phone permission), checked once a " +
+                        "second while “Follow calls” is on. A very short VoIP call can therefore miss the " +
+                        "automatic switch — the first touch still re-checks before it changes anything.",
                 )
             }
         }

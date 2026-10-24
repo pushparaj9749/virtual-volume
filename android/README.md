@@ -18,7 +18,8 @@ gradle :app:lintDebug
 ## Package map
 
 - `core/data` — `VolumeSettings`, DataStore repository, enums.
-- `core/audio` — `VolumeController`, `VolumeMath`, backend, volume observer.
+- `core/audio` — `VolumeController`, `VolumeMath`, backend, volume observer, call monitor,
+  and `VolumeStreamResolver` (call volume wins while a call is up).
 - `core/platform` — permissions, haptics, runtime state, service controller.
 - `overlay` — service, window host, gesture engine, layout resolver, control view, painter.
 - `tile` — Quick Settings tile + sync.
@@ -27,6 +28,6 @@ gradle :app:lintDebug
 
 ## Testing
 
-Pure JVM unit tests cover the gesture engine, layout resolver, volume maths, settings codec and
-control spec factory. A Robolectric test dispatches real motion events into the real
+Pure JVM unit tests cover the gesture engine, layout resolver, volume maths, settings codec,
+control spec factory and stream resolution. A Robolectric test dispatches real motion events into the real
 `OverlayControlView`.

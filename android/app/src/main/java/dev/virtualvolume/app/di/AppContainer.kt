@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import dev.virtualvolume.app.core.audio.AudioManagerBackend
 import dev.virtualvolume.app.core.audio.AudioVolumeMonitor
+import dev.virtualvolume.app.core.audio.CallAudioMonitor
 import dev.virtualvolume.app.core.audio.VolumeController
 import dev.virtualvolume.app.core.data.SettingsRepository
 import dev.virtualvolume.app.core.platform.Haptics
@@ -48,6 +49,9 @@ class AppContainer(context: Context) {
     }
 
     val audioVolumeMonitor: AudioVolumeMonitor by lazy { AudioVolumeMonitor(appContext) }
+
+    /** Tells the control when a call starts or ends so it can switch to call volume. */
+    val callAudioMonitor: CallAudioMonitor by lazy { CallAudioMonitor(audioManager) }
 
     val haptics: Haptics by lazy { Haptics(appContext) }
 
